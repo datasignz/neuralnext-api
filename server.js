@@ -2,10 +2,15 @@ import Fastify from "fastify";
 import multipart from "@fastify/multipart";
 
 const app = Fastify({
-  logger: true
+  logger: true,
+  bodyLimit: 500 * 1024 * 1024
 });
 
-await app.register(multipart);
+await app.register(multipart, {
+  limits: {
+    fileSize: 500 * 1024 * 1024
+  }
+});
 
 app.get("/", async () => {
   return {
@@ -38,14 +43,26 @@ app.post("/api/social/publish", async (request, reply) => {
 
     const parts = request.parts();
 
+    let mediaType = null;
     let fileCount = 0;
 
     for await (const part of parts) {
+
       if (part.type === "file") {
+
         const buffer = await part.toBuffer();
 
+        mediaType = part.mimetype?.startsWith("video/")
+          ? "video"
+          : "photo";
+
+        const fieldName =
+          mediaType === "video"
+            ? "video"
+            : "photos[]";
+
         form.append(
-          part.fieldname,
+          fieldName,
           new Blob([buffer], {
             type: part.mimetype
           }),
@@ -53,8 +70,11 @@ app.post("/api/social/publish", async (request, reply) => {
         );
 
         fileCount++;
+
       } else {
+
         form.append(part.fieldname, part.value);
+
       }
     }
 
@@ -65,8 +85,21 @@ app.post("/api/social/publish", async (request, reply) => {
       });
     }
 
+    let endpoint;
+
+    if (mediaType === "video") {
+      endpoint = "/api/upload";
+    } else {
+      endpoint = "/api/upload_photos";
+    }
+
+    request.log.info({
+      mediaType,
+      endpoint
+    }, "Publishing media");
+
     const response = await fetch(
-      `${apiUrl}/api/upload_photos`,
+      `${apiUrl}${endpoint}`,
       {
         method: "POST",
         headers: {
@@ -76,17 +109,30 @@ app.post("/api/social/publish", async (request, reply) => {
       }
     );
 
-    const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {
+        success: false,
+        error: text
+      };
+    }
 
     return reply.code(response.status).send(data);
 
   } catch (error) {
+
     request.log.error(error);
 
     return reply.code(500).send({
       success: false,
       error: error.message
     });
+
   }
 });
 
@@ -94,13 +140,19 @@ const port = Number(process.env.PORT || 3000);
 const host = "0.0.0.0";
 
 try {
+
   await app.listen({
     port,
     host
   });
 
-  console.log(`NeuralNext API running on port ${port}`);
+  console.log(
+    `NeuralNext API running on port ${port}`
+  );
+
 } catch (error) {
+
   app.log.error(error);
   process.exit(1);
+
 }
