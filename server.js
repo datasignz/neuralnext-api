@@ -137,20 +137,25 @@ app.post("/api/social/publish", async (request, reply) => {
     const endpoint = mediaType === "video" ? "/api/upload" : "/api/upload_photos";
     const requestId = String(request.headers["x-request-id"] || randomUUID());
 
-    // Upload-Post supports async video uploads and status polling by request_id.
+    // Always send a stable request ID to Upload-Post for status tracking, for both
+    // photos and videos. Callers should reuse X-Request-Id when retrying a request.
+    form.set("request_id", requestId);
+
+    // Upload-Post documents Idempotency-Key, X-Idempotency-Key, and X-Request-Id
+    // as duplicate-prevention keys (24-hour window). Prefer an explicit idempotency
+    // key; otherwise use the caller's stable X-Request-Id.
     if (mediaType === "video") {
       form.set("async_upload", "true");
-      form.set("request_id", requestId);
     }
 
     const headers = {
       Authorization: `Apikey ${apiKey}`
     };
 
-    // Forward a caller-supplied idempotency key so retries can avoid duplicate posts.
     const idempotencyKey =
       request.headers["idempotency-key"] ||
-      request.headers["x-idempotency-key"];
+      request.headers["x-idempotency-key"] ||
+      request.headers["x-request-id"];
     if (idempotencyKey) {
       headers["Idempotency-Key"] = String(idempotencyKey);
     }
