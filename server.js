@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
+import { randomUUID } from "node:crypto";
 
 const app = Fastify({
   logger: true,
@@ -12,26 +13,71 @@ await app.register(multipart, {
   }
 });
 
-app.get("/", async () => {
-  return {
-    name: "NeuralNext Engage API",
-    status: "online"
-  };
-});
+const uploadPostBaseUrl = () =>
+  (process.env.UPLOAD_POST_API_URL || "https://api.upload-post.com").replace(/\/+$/, "");
 
-app.get("/health", async () => {
-  return {
-    status: "ok"
-  };
+app.get("/", async () => ({
+  name: "NeuralNext Engage API",
+  status: "online"
+}));
+
+app.get("/health", async () => ({
+  status: "ok"
+}));
+
+// Proxy Upload-Post status without exposing the API key to clients.
+app.get("/api/uploadposts/status", async (request, reply) => {
+  const apiKey = process.env.UPLOAD_POST_API_KEY;
+  if (!apiKey) {
+    return reply.code(500).send({
+      success: false,
+      error: "UPLOAD_POST_API_KEY is not configured"
+    });
+  }
+
+  const { request_id: requestId, job_id: jobId } = request.query || {};
+  if (!requestId && !jobId) {
+    return reply.code(400).send({
+      success: false,
+      error: "Provide request_id or job_id"
+    });
+  }
+
+  const params = new URLSearchParams();
+  if (requestId) params.set("request_id", String(requestId));
+  if (jobId) params.set("job_id", String(jobId));
+
+  try {
+    const response = await fetch(
+      `${uploadPostBaseUrl()}/api/uploadposts/status?${params.toString()}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Apikey ${apiKey}` },
+        signal: AbortSignal.timeout(30_000)
+      }
+    );
+
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { success: false, error: text };
+    }
+
+    return reply.code(response.status).send(data);
+  } catch (error) {
+    request.log.error({ err: error }, "Upload-Post status request failed");
+    return reply.code(502).send({
+      success: false,
+      error: "Could not retrieve publishing status from Upload-Post"
+    });
+  }
 });
 
 app.post("/api/social/publish", async (request, reply) => {
   try {
     const apiKey = process.env.UPLOAD_POST_API_KEY;
-    const apiUrl =
-      process.env.UPLOAD_POST_API_URL ||
-      "https://api.upload-post.com";
-
     if (!apiKey) {
       return reply.code(500).send({
         success: false,
@@ -40,41 +86,36 @@ app.post("/api/social/publish", async (request, reply) => {
     }
 
     const form = new FormData();
-
-    const parts = request.parts();
-
-    let mediaType = null;
+    const mediaTypes = new Set();
     let fileCount = 0;
+    let videoCount = 0;
 
-    for await (const part of parts) {
-
+    for await (const part of request.parts()) {
       if (part.type === "file") {
+        const isVideo = part.mimetype?.startsWith("video/") ||
+          /\.(mp4|mov|mpeg|mpg|webm|m4v)$/i.test(part.filename || "");
+        const mediaType = isVideo ? "video" : "photo";
+        mediaTypes.add(mediaType);
+
+        if (isVideo) videoCount++;
+        if (videoCount > 1) {
+          return reply.code(400).send({
+            success: false,
+            error: "Only one video file can be published per request"
+          });
+        }
 
         const buffer = await part.toBuffer();
-
-        mediaType = part.mimetype?.startsWith("video/")
-          ? "video"
-          : "photo";
-
-        const fieldName =
-          mediaType === "video"
-            ? "video"
-            : "photos[]";
-
         form.append(
-          fieldName,
+          isVideo ? "video" : "photos[]",
           new Blob([buffer], {
-            type: part.mimetype
+            type: part.mimetype || (isVideo ? "video/mp4" : "application/octet-stream")
           }),
-          part.filename
+          part.filename || (isVideo ? "video.mp4" : "photo")
         );
-
         fileCount++;
-
       } else {
-
         form.append(part.fieldname, part.value);
-
       }
     }
 
@@ -85,54 +126,68 @@ app.post("/api/social/publish", async (request, reply) => {
       });
     }
 
-    let endpoint;
+    if (mediaTypes.size > 1) {
+      return reply.code(400).send({
+        success: false,
+        error: "Send either photos or one video per request, not mixed media"
+      });
+    }
 
+    const mediaType = mediaTypes.has("video") ? "video" : "photo";
+    const endpoint = mediaType === "video" ? "/api/upload" : "/api/upload_photos";
+    const requestId = String(request.headers["x-request-id"] || randomUUID());
+
+    // Upload-Post supports async video uploads and status polling by request_id.
     if (mediaType === "video") {
-      endpoint = "/api/upload";
-    } else {
-      endpoint = "/api/upload_photos";
+      form.set("async_upload", "true");
+      form.set("request_id", requestId);
+    }
+
+    const headers = {
+      Authorization: `Apikey ${apiKey}`
+    };
+
+    // Forward a caller-supplied idempotency key so retries can avoid duplicate posts.
+    const idempotencyKey =
+      request.headers["idempotency-key"] ||
+      request.headers["x-idempotency-key"];
+    if (idempotencyKey) {
+      headers["Idempotency-Key"] = String(idempotencyKey);
     }
 
     request.log.info({
       mediaType,
-      endpoint
-    }, "Publishing media");
+      endpoint,
+      requestId,
+      fileCount
+    }, "Forwarding publish request to Upload-Post");
 
-    const response = await fetch(
-      `${apiUrl}${endpoint}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Apikey ${apiKey}`
-        },
-        body: form
-      }
-    );
+    const response = await fetch(`${uploadPostBaseUrl()}${endpoint}`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: AbortSignal.timeout(10 * 60 * 1000)
+    });
 
     const text = await response.text();
-
     let data;
-
     try {
       data = JSON.parse(text);
     } catch {
-      data = {
-        success: false,
-        error: text
-      };
+      data = { success: false, error: text };
+    }
+
+    if (mediaType === "video" && data && typeof data === "object" && !data.request_id) {
+      data.request_id = requestId;
     }
 
     return reply.code(response.status).send(data);
-
   } catch (error) {
-
-    request.log.error(error);
-
+    request.log.error({ err: error }, "Social publishing request failed");
     return reply.code(500).send({
       success: false,
-      error: error.message
+      error: error.message || "Unexpected publishing error"
     });
-
   }
 });
 
@@ -140,19 +195,9 @@ const port = Number(process.env.PORT || 3000);
 const host = "0.0.0.0";
 
 try {
-
-  await app.listen({
-    port,
-    host
-  });
-
-  console.log(
-    `NeuralNext API running on port ${port}`
-  );
-
+  await app.listen({ port, host });
+  app.log.info(`NeuralNext API running on port ${port}`);
 } catch (error) {
-
   app.log.error(error);
   process.exit(1);
-
 }
