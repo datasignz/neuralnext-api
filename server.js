@@ -137,6 +137,13 @@ app.post("/api/social/publish", async (request, reply) => {
     const endpoint = mediaType === "video" ? "/api/upload" : "/api/upload_photos";
     const requestId = String(request.headers["x-request-id"] || randomUUID());
 
+    // Scheduled posts use Upload-Post's scheduler. Dates should be ISO-8601.
+    // When callers provide a local date/time without a timezone field, interpret it
+    // in Suriname time by default. Callers may override this with an IANA timezone.
+    if (form.has("scheduled_date") && !form.has("timezone")) {
+      form.set("timezone", "America/Paramaribo");
+    }
+
     // Always send a stable request ID to Upload-Post for status tracking, for both
     // photos and videos. Callers should reuse X-Request-Id when retrying a request.
     form.set("request_id", requestId);
