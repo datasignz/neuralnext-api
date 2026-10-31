@@ -109,48 +109,6 @@ async function initializeDatabase() {
 
 app.get("/", async () => ({ name: "NeuralNext Engage API", status: "online" }));
 app.get("/health", async () => ({ status: "ok" }));
-app.get("/api/test/status-mapping", async (request, reply) => {
-  if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
-
-  const tests = [
-    {
-      name: "Completed",
-      input: { success: true, status: "completed", job_id: "test-123" },
-      expected: "published"
-    },
-    {
-      name: "Scheduled",
-      input: { success: true, status: "scheduled", job_id: "test-456" },
-      expected: "scheduled"
-    },
-    {
-      name: "Failed",
-      input: { success: false, status: "failed" },
-      expected: "failed"
-    },
-    {
-      name: "Processing",
-      input: { success: true, status: "processing", job_id: "test-789" },
-      expected: "submitted"
-    }
-  ];
-
-  const results = tests.map(test => {
-    const actual = mapUploadPostStatus(test.input, true, false);
-
-    return {
-      name: test.name,
-      expected: test.expected,
-      actual,
-      passed: actual === test.expected
-    };
-  });
-
-  return {
-    success: results.every(result => result.passed),
-    results
-  };
-});
 
 app.get("/api/uploadposts/status", async (request, reply) => {
   const apiKey = process.env.UPLOAD_POST_API_KEY;
