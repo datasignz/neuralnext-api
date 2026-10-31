@@ -313,8 +313,27 @@ app.post("/api/approval/:id/approve", async (request, reply) => {
     let data;
     try { data = JSON.parse(raw); } catch { data = { success: false, error: raw }; }
     const success = upstream.ok && data?.success !== false;
-    const nextStatus = !success ? "failed" : data.job_id ? "scheduled" :
-      (data.message?.toLowerCase?.().includes("background") || isVideo ? "submitted" : "published");
+const uploadStatus = String(data.status || "").toLowerCase();
+
+let nextStatus;
+
+if (!success) {
+  nextStatus = "failed";
+} else if (uploadStatus === "completed") {
+  nextStatus = "published";
+} else if (uploadStatus === "scheduled") {
+  nextStatus = "scheduled";
+} else if (
+  uploadStatus === "processing" ||
+  data.message?.toLowerCase?.().includes("background") ||
+  isVideo
+) {
+  nextStatus = "submitted";
+} else if (data.job_id) {
+  nextStatus = "scheduled";
+} else {
+  nextStatus = "published";
+}
     await pool.query(
       `UPDATE approval_items SET status=$2, upload_post_job_id=$3, upload_post_request_id=$4,
        publish_response=$5::jsonb, review_note=$6, updated_at=NOW() WHERE id=$1`,
