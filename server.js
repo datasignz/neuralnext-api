@@ -147,6 +147,10 @@ request.log.info({
     timezone: body.timezone || "America/Paramaribo",
     extra_fields: body.extra_fields && typeof body.extra_fields === "object" && !Array.isArray(body.extra_fields) ? body.extra_fields : {}
   };
+  request.log.info({
+  payloadMediaUrls: payload.media_urls,
+  databaseRequestId: requestId
+}, "Approval payload before database insert");
   try {
     const result = await pool.query(
       `INSERT INTO approval_items (id, request_id, status, payload, submitted_by)
