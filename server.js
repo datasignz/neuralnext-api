@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import pg from "pg";
+import pg from "pg"; 
 
 const { Pool } = pg;
 const app = Fastify({ logger: true, bodyLimit: 2 * 1024 * 1024 });
