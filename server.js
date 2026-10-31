@@ -187,6 +187,15 @@ app.get("/api/approval/pending", async (request, reply) => {
       "SELECT id, request_id, status, payload, submitted_by, submitted_at FROM approval_items WHERE status='pending_approval' ORDER BY submitted_at ASC LIMIT $1",
       [limit]
     );
+    request.log.info({
+  targetId: "37e56fdc-ce90-4fb2-94c3-da9b2047d77c",
+  matchingRecord: result.rows
+    .filter(row => row.id === "37e56fdc-ce90-4fb2-94c3-da9b2047d77c")
+    .map(row => ({
+      id: row.id,
+      mediaUrls: row.payload?.media_urls
+    }))
+}, "Pending endpoint database read-back");
     return { success: true, items: result.rows };
   } catch (error) {
     request.log.error({ err: error }, "Pending approval list failed");
