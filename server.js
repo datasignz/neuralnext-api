@@ -152,13 +152,18 @@ request.log.info({
   databaseRequestId: requestId
 }, "Approval payload before database insert");
   try {
-    const result = await pool.query(
-      `INSERT INTO approval_items (id, request_id, status, payload, submitted_by)
-       VALUES ($1, $2, 'pending_approval', $3::jsonb, $4)
-       ON CONFLICT (request_id) DO NOTHING
-       RETURNING id, request_id, status, submitted_at`,
-      [id, requestId, JSON.stringify(payload), String(body.submitted_by || "agent").slice(0, 200)]
-    );
+const result = await pool.query(
+  `INSERT INTO approval_items (id, request_id, status, payload, submitted_by)
+   VALUES ($1, $2, 'pending_approval', $3::jsonb, $4)
+   ON CONFLICT (request_id) DO NOTHING
+   RETURNING id, request_id, status, submitted_at, payload`,
+  [id, requestId, JSON.stringify(payload), String(body.submitted_by || "agent").slice(0, 200)]
+);
+request.log.info({
+  insertedId: result.rows[0]?.id,
+  insertedRequestId: result.rows[0]?.request_id,
+  insertedMediaUrls: result.rows[0]?.payload?.media_urls
+}, "Approval database insert read-back");
     if (result.rowCount === 0) {
       const existing = await pool.query(
         "SELECT id, request_id, status, submitted_at FROM approval_items WHERE request_id=$1",
