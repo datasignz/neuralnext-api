@@ -34,7 +34,44 @@ function requireKey(request, reply, envName) {
   }
   return true;
 }
+function mapUploadPostStatus(data, upstreamOk, isVideo) {
+  if (!upstreamOk || data?.success === false) {
+    return "failed";
+  }
 
+  const statuses = [
+    data?.status,
+    ...Object.values(data?.results || {}).map(result => result?.status)
+  ]
+    .filter(Boolean)
+    .map(status => String(status).toLowerCase());
+
+  if (statuses.includes("failed")) {
+    return "failed";
+  }
+
+  if (statuses.includes("scheduled")) {
+    return "scheduled";
+  }
+
+  if (statuses.length > 0 && statuses.every(status => status === "completed")) {
+    return "published";
+  }
+
+  if (
+    statuses.includes("processing") ||
+    data?.message?.toLowerCase?.().includes("background") ||
+    isVideo
+  ) {
+    return "submitted";
+  }
+
+  if (data?.job_id) {
+    return "scheduled";
+  }
+
+  return "published";
+}
 function requireDb(reply) {
   if (!pool) {
     reply.code(503).send({ success: false, error: "DATABASE_URL is not configured" });
@@ -313,27 +350,12 @@ app.post("/api/approval/:id/approve", async (request, reply) => {
     let data;
     try { data = JSON.parse(raw); } catch { data = { success: false, error: raw }; }
     const success = upstream.ok && data?.success !== false;
-const uploadStatus = String(data.status || "").toLowerCase();
 
-let nextStatus;
-
-if (!success) {
-  nextStatus = "failed";
-} else if (uploadStatus === "completed") {
-  nextStatus = "published";
-} else if (uploadStatus === "scheduled") {
-  nextStatus = "scheduled";
-} else if (
-  uploadStatus === "processing" ||
-  data.message?.toLowerCase?.().includes("background") ||
+const nextStatus = mapUploadPostStatus(
+  data,
+  upstream.ok,
   isVideo
-) {
-  nextStatus = "submitted";
-} else if (data.job_id) {
-  nextStatus = "scheduled";
-} else {
-  nextStatus = "published";
-}
+);
     await pool.query(
       `UPDATE approval_items SET status=$2, upload_post_job_id=$3, upload_post_request_id=$4,
        publish_response=$5::jsonb, review_note=$6, updated_at=NOW() WHERE id=$1`,
