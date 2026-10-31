@@ -101,7 +101,8 @@ app.post("/api/approval/submit", async (request, reply) => {
   if (!requireKey(request, reply, "APPROVAL_SUBMIT_KEY")) return;
   if (!requireDb(reply)) return;
   const body = request.body || {};
-  const platforms = Array.isArray(body.platforms) ? body.platforms : [];
+const platforms = Array.isArray(body.platforms) ? body.platforms : [];
+
 const mediaUrls = Array.isArray(body.media_urls)
   ? body.media_urls.map((url) => {
       const value = String(url).trim();
@@ -109,6 +110,11 @@ const mediaUrls = Array.isArray(body.media_urls)
       return markdownMatch ? markdownMatch[2] : value;
     })
   : [];
+
+request.log.info({
+  receivedMediaUrls: body.media_urls,
+  cleanedMediaUrls: mediaUrls
+}, "Approval media URL normalization");
   const videoUrl = body.video_url;
   if (typeof body.user !== "string" || !body.user.trim()) {
     return reply.code(400).send({ success: false, error: "user is required" });
