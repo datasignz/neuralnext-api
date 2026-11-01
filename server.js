@@ -551,6 +551,59 @@ app.post("/api/approval/submit", async (request, reply) => {
   }
 });
 
+
+// Dashboard overview: status counts and latest approval/publication records.
+app.get("/api/dashboard/overview", async (request, reply) => {
+  if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
+  if (!requireDb(reply)) return;
+
+  try {
+    const counts = await pool.query(
+      `SELECT status, COUNT(*)::int AS count
+       FROM approval_items
+       GROUP BY status`
+    );
+
+    const recent = await pool.query(
+      `SELECT id, request_id, status, payload, submitted_by,
+              reviewed_by, review_note, submitted_at, reviewed_at,
+              updated_at, upload_post_job_id, upload_post_request_id,
+              publish_response
+       FROM approval_items
+       ORDER BY submitted_at DESC
+       LIMIT 50`
+    );
+
+    const summary = {
+      pending_approval: 0,
+      publishing: 0,
+      submitted: 0,
+      scheduled: 0,
+      published: 0,
+      failed: 0,
+      rejected: 0
+    };
+
+    for (const row of counts.rows) {
+      summary[row.status] = row.count;
+    }
+
+    return {
+      success: true,
+      generated_at: new Date().toISOString(),
+      totals: summary,
+      total_items: Object.values(summary).reduce((sum, value) => sum + value, 0),
+      items: recent.rows
+    };
+  } catch (error) {
+    request.log.error({ err: error }, "Dashboard overview query failed");
+    return reply.code(500).send({
+      success: false,
+      error: "Could not load dashboard overview"
+    });
+  }
+});
+
 // List pending approval requests.
 app.get("/api/approval/pending", async (request, reply) => {
   if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
