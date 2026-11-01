@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 
 const { Pool } = pg;
@@ -17,6 +17,50 @@ function secretMatches(provided, expected) {
   const a = Buffer.from(String(provided));
   const b = Buffer.from(String(expected));
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+
+const dashboardCookieName = "nn_dashboard_session";
+const dashboardSessionLifetimeSeconds = 8 * 60 * 60;
+const dashboardLoginAttempts = new Map();
+
+function safeStringMatch(provided, expected) {
+  if (typeof provided !== "string" || typeof expected !== "string") return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function dashboardCookieValue(expiresAt) {
+  const secret = process.env.DASHBOARD_SESSION_SECRET;
+  const signature = createHmac("sha256", secret)
+    .update(`neuralnext-dashboard:${expiresAt}`)
+    .digest("hex");
+  return `${expiresAt}.${signature}`;
+}
+
+function hasDashboardSession(request) {
+  const secret = process.env.DASHBOARD_SESSION_SECRET;
+  if (!secret) return false;
+  const cookieHeader = request.headers.cookie || "";
+  const cookie = cookieHeader.split(";").map(part => part.trim())
+    .find(part => part.startsWith(`${dashboardCookieName}=`));
+  if (!cookie) return false;
+
+  const value = decodeURIComponent(cookie.slice(dashboardCookieName.length + 1));
+  const [expiryText, suppliedSignature] = value.split(".");
+  const expiresAt = Number(expiryText);
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) return false;
+
+  const expected = createHmac("sha256", secret)
+    .update(`neuralnext-dashboard:${expiresAt}`)
+    .digest("hex");
+  return safeStringMatch(suppliedSignature || "", expected);
+}
+
+function requireReviewAccess(request, reply) {
+  if (hasDashboardSession(request)) return true;
+  return requireReviewAccess(request, reply);
 }
 
 function requireKey(request, reply, envName) {
@@ -251,9 +295,69 @@ app.get("/health", async () => ({
   status: "ok"
 }));
 
+
+// Dashboard login. Credentials and signing secret are configured in Railway variables.
+app.post("/api/dashboard/login", async (request, reply) => {
+  const username = process.env.DASHBOARD_USERNAME;
+  const password = process.env.DASHBOARD_PASSWORD;
+  const signingSecret = process.env.DASHBOARD_SESSION_SECRET;
+
+  if (!username || !password || !signingSecret) {
+    return reply.code(503).send({
+      success: false,
+      error: "Dashboard login is not configured"
+    });
+  }
+
+  const ip = request.ip;
+  const now = Date.now();
+  const attempt = dashboardLoginAttempts.get(ip) || { count: 0, firstAt: now };
+  if (now - attempt.firstAt > 15 * 60 * 1000) {
+    dashboardLoginAttempts.delete(ip);
+  } else if (attempt.count >= 10) {
+    return reply.code(429).send({ success: false, error: "Too many login attempts. Try again in 15 minutes." });
+  }
+
+  const suppliedUsername = String(request.body?.username || "");
+  const suppliedPassword = String(request.body?.password || "");
+  const valid = safeStringMatch(suppliedUsername, username) &&
+    safeStringMatch(suppliedPassword, password);
+
+  if (!valid) {
+    dashboardLoginAttempts.set(ip, {
+      count: attempt.count + 1,
+      firstAt: attempt.firstAt
+    });
+    return reply.code(401).send({ success: false, error: "Invalid username or password" });
+  }
+
+  dashboardLoginAttempts.delete(ip);
+  const expiresAt = Math.floor(Date.now() / 1000) + dashboardSessionLifetimeSeconds;
+  reply.header(
+    "Set-Cookie",
+    `${dashboardCookieName}=${dashboardCookieValue(expiresAt)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${dashboardSessionLifetimeSeconds}`
+  );
+  return { success: true, expires_at: new Date(expiresAt * 1000).toISOString() };
+});
+
+app.get("/api/dashboard/me", async (request, reply) => {
+  if (!hasDashboardSession(request)) {
+    return reply.code(401).send({ success: false, error: "Not authenticated" });
+  }
+  return { success: true, authenticated: true };
+});
+
+app.post("/api/dashboard/logout", async (request, reply) => {
+  reply.header(
+    "Set-Cookie",
+    `${dashboardCookieName}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
+  );
+  return { success: true };
+});
+
 // Upload-Post status check with automatic PostgreSQL synchronisation.
 app.get("/api/uploadposts/status", async (request, reply) => {
-  if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
+  if (!requireReviewAccess(request, reply)) return;
   if (!requireDb(reply)) return;
 
   const apiKey = process.env.UPLOAD_POST_API_KEY;
@@ -554,7 +658,7 @@ app.post("/api/approval/submit", async (request, reply) => {
 
 // Dashboard overview: status counts and latest approval/publication records.
 app.get("/api/dashboard/overview", async (request, reply) => {
-  if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
+  if (!requireReviewAccess(request, reply)) return;
   if (!requireDb(reply)) return;
 
   try {
@@ -606,7 +710,7 @@ app.get("/api/dashboard/overview", async (request, reply) => {
 
 // List pending approval requests.
 app.get("/api/approval/pending", async (request, reply) => {
-  if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
+  if (!requireReviewAccess(request, reply)) return;
   if (!requireDb(reply)) return;
 
   try {
@@ -652,7 +756,7 @@ app.get("/api/approval/pending", async (request, reply) => {
 
 // Retrieve the status of an approval record.
 app.get("/api/approval/:id/status", async (request, reply) => {
-  if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
+  if (!requireReviewAccess(request, reply)) return;
   if (!requireDb(reply)) return;
 
   try {
@@ -700,7 +804,7 @@ app.get("/api/approval/:id/status", async (request, reply) => {
 
 // Reject an approval request.
 app.post("/api/approval/:id/reject", async (request, reply) => {
-  if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
+  if (!requireReviewAccess(request, reply)) return;
   if (!requireDb(reply)) return;
 
   const note = String(request.body?.reason || "").slice(0, 2000);
@@ -753,7 +857,7 @@ app.post("/api/approval/:id/reject", async (request, reply) => {
 
 // Approve and publish a request through Upload-Post.
 app.post("/api/approval/:id/approve", async (request, reply) => {
-  if (!requireKey(request, reply, "APPROVAL_REVIEW_KEY")) return;
+  if (!requireReviewAccess(request, reply)) return;
   if (!requireDb(reply)) return;
 
   const client = await pool.connect();
