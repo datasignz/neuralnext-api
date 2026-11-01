@@ -4,6 +4,7 @@ import pg from "pg";
 
 const { Pool } = pg;
 const app = Fastify({ logger: true, bodyLimit: 2 * 1024 * 1024 });
+await app.register((await import("@fastify/multipart")).default, { limits: { fileSize: 100 * 1024 * 1024, files: 1, fields: 30 } });
 
 const uploadPostBaseUrl = () =>
   (process.env.UPLOAD_POST_API_URL || "https://api.upload-post.com").replace(/\/+$/, "");
@@ -196,6 +197,9 @@ async function initializeDatabase() {
   `);
 
   await pool.query("ALTER TABLE approval_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ");
+  await pool.query("ALTER TABLE approval_items ADD COLUMN IF NOT EXISTS video_data BYTEA");
+  await pool.query("ALTER TABLE approval_items ADD COLUMN IF NOT EXISTS video_filename TEXT");
+  await pool.query("ALTER TABLE approval_items ADD COLUMN IF NOT EXISTS video_mimetype TEXT");
   await pool.query(
     "CREATE INDEX IF NOT EXISTS approval_items_status_submitted_idx ON approval_items (status, submitted_at DESC)"
   );
@@ -265,7 +269,7 @@ async function pollUploadPostStatuses() {
         const nextStatus = mapUploadPostStatus(
           data,
           true,
-          Boolean(item.payload?.video_url)
+          Boolean(item.payload?.video_url || item.payload?.video_upload)
         );
 
         if (nextStatus === item.status) continue;
@@ -321,6 +325,26 @@ app.get("/", async () => ({
 app.get("/health", async () => ({
   status: "ok"
 }));
+
+// Serve an uploaded approval video to authenticated dashboard sessions for preview.
+app.get("/api/approval/:id/video", async (request, reply) => {
+  if (!requireDashboardReadAccess(request, reply)) return;
+  if (!requireDb(reply)) return;
+  try {
+    const result = await pool.query(
+      "SELECT video_data, video_filename, video_mimetype FROM approval_items WHERE id=$1 AND video_data IS NOT NULL",
+      [request.params.id]
+    );
+    if (!result.rowCount) return reply.code(404).send({ success: false, error: "Video not found" });
+    reply.header("Content-Disposition", 'inline; filename="' + String(result.rows[0].video_filename || "video.mp4").replace(/["\\\\]/g, "") + '"');
+    reply.type(result.rows[0].video_mimetype || "video/mp4");
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(result.rows[0].video_data);
+  } catch (error) {
+    request.log.error({ err: error }, "Uploaded video retrieval failed");
+    return reply.code(500).send({ success: false, error: "Could not retrieve video" });
+  }
+});
 
 
 
@@ -672,7 +696,7 @@ app.get("/api/uploadposts/status", async (request, reply) => {
 
     if (matching.rowCount > 0) {
       const item = matching.rows[0];
-      const isVideo = Boolean(item.payload?.video_url);
+      const isVideo = Boolean(item.payload?.video_url || item.payload?.video_upload);
 
       const nextStatus = mapUploadPostStatus(
         data,
@@ -909,6 +933,115 @@ app.post("/api/approval/submit", async (request, reply) => {
   }
 });
 
+
+
+// Submit an approval request with a locally uploaded video file (multipart/form-data).
+app.post("/api/approval/submit-upload", async (request, reply) => {
+  if (!requireKey(request, reply, "APPROVAL_SUBMIT_KEY")) return;
+  if (!requireDb(reply)) return;
+
+  const body = {};
+  let videoBuffer = null;
+  let videoFilename = "video.mp4";
+  let videoMimetype = "video/mp4";
+
+  try {
+    for await (const part of request.parts()) {
+      if (part.type === "file") {
+        if (part.fieldname !== "video") {
+          await part.toBuffer();
+          continue;
+        }
+        videoBuffer = await part.toBuffer();
+        videoFilename = String(part.filename || "video.mp4").replace(/[\\/\\\\]/g, "_").slice(0, 255);
+        videoMimetype = part.mimetype || "application/octet-stream";
+      } else {
+        const value = part.value;
+        if (part.fieldname === "platform[]") {
+          body.platforms ||= [];
+          body.platforms.push(String(value));
+        } else {
+          body[part.fieldname] = value;
+        }
+      }
+    }
+  } catch (error) {
+    const tooLarge = error.code === "FST_REQ_FILE_TOO_LARGE";
+    return reply.code(tooLarge ? 413 : 400).send({
+      success: false,
+      error: tooLarge ? "Video exceeds the 100 MB upload limit" : "Could not read uploaded video"
+    });
+  }
+
+  if (!videoBuffer?.length) return reply.code(400).send({ success: false, error: "A video file in the 'video' field is required" });
+  if (!["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"].includes(videoMimetype)) {
+    return reply.code(400).send({ success: false, error: "Unsupported video type. Use MP4, MOV or WebM." });
+  }
+
+  const platforms = Array.isArray(body.platforms) ? body.platforms : [];
+  if (typeof body.user !== "string" || !body.user.trim()) {
+    return reply.code(400).send({ success: false, error: "user is required" });
+  }
+  if (!platforms.length || platforms.some(p => !String(p).trim())) {
+    return reply.code(400).send({ success: false, error: "At least one platform is required" });
+  }
+  if (!String(body.caption || "").trim()) {
+    return reply.code(400).send({ success: false, error: "A non-empty caption/title is required for video publishing" });
+  }
+  if (body.scheduled_date && Number.isNaN(Date.parse(body.scheduled_date))) {
+    return reply.code(400).send({ success: false, error: "scheduled_date must be a valid ISO-8601 date/time" });
+  }
+
+  let extraFields = {};
+  if (body.extra_fields) {
+    try { extraFields = typeof body.extra_fields === "string" ? JSON.parse(body.extra_fields) : body.extra_fields; }
+    catch { return reply.code(400).send({ success: false, error: "extra_fields must be valid JSON" }); }
+  }
+
+  const allowedClients = ["Datasignz CreativeMinds", "De Sportwekker", "CleviaStudios"];
+  const clientName = String(body.client_name || "Datasignz CreativeMinds").trim();
+  if (!allowedClients.includes(clientName)) return reply.code(400).send({ success: false, error: "Unknown client_name" });
+
+  const requestId = String(body.request_id || randomUUID()).slice(0, 200);
+  const id = randomUUID();
+  const payload = {
+    client_name: clientName,
+    user: body.user.trim(),
+    platforms: platforms.map(p => String(p).trim()),
+    caption: String(body.caption || ""),
+    media_urls: [],
+    video_url: null,
+    video_upload: true,
+    scheduled_date: body.scheduled_date || null,
+    timezone: body.timezone || "America/Paramaribo",
+    extra_fields: extraFields && typeof extraFields === "object" && !Array.isArray(extraFields) ? extraFields : {}
+  };
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO approval_items
+       (id, request_id, status, payload, submitted_by, video_data, video_filename, video_mimetype)
+       VALUES ($1, $2, 'pending_approval', $3::jsonb, $4, $5, $6, $7)
+       ON CONFLICT (request_id) DO NOTHING
+       RETURNING id, request_id, status, submitted_at, payload`,
+      [id, requestId, JSON.stringify(payload), String(body.submitted_by || "agent").slice(0, 200),
+       videoBuffer, videoFilename, videoMimetype]
+    );
+
+    if (!result.rowCount) {
+      const existing = await pool.query(
+        "SELECT id, request_id, status, submitted_at FROM approval_items WHERE request_id=$1",
+        [requestId]
+      );
+      return reply.code(200).send({ success: true, duplicate: true, item: existing.rows[0] });
+    }
+
+    return reply.code(201).send({ success: true, item: result.rows[0], video: { filename: videoFilename, size_bytes: videoBuffer.length } });
+  } catch (error) {
+    request.log.error({ err: error }, "Video approval submission failed");
+    return reply.code(500).send({ success: false, error: "Could not save video approval request" });
+  }
+});
 
 
 // Edit a pending post caption before approval. Preserve the first submitted caption for audit.
@@ -1336,7 +1469,7 @@ app.post("/api/approval/:id/approve", async (request, reply) => {
   }
 
   const payload = item.payload;
-  const isVideo = Boolean(payload.video_url);
+  const isVideo = Boolean(payload.video_url || item.video_data);
 
   const form = new FormData();
 
@@ -1351,7 +1484,11 @@ app.post("/api/approval/:id/approve", async (request, reply) => {
   }
 
   if (isVideo) {
-    form.set("video", payload.video_url);
+    if (item.video_data) {
+      form.set("video", new Blob([item.video_data], { type: item.video_mimetype || "video/mp4" }), item.video_filename || "video.mp4");
+    } else {
+      form.set("video", payload.video_url);
+    }
   } else {
     for (const url of payload.media_urls) {
       form.append("photos[]", url);
