@@ -321,7 +321,7 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 .item{border:1px solid var(--line);border-radius:12px;padding:17px;margin:10px 0;background:#10182a}
 .item-top{display:flex;justify-content:space-between;gap:12px;align-items:center}.pill{font-size:12px;padding:4px 9px;border-radius:20px;background:#273650;color:#d9e3fa}
 .pill.pending_approval{background:#514122;color:#ffe2a1}.pill.published{background:#164632;color:#a7f0ca}.pill.failed{background:#542b35;color:#ffc1c1}
-.media-preview{margin:14px 0;display:flex;gap:9px;align-items:flex-start;flex-wrap:wrap}.media-preview img{display:block;max-width:100%;width:auto;max-height:320px;object-fit:contain;border-radius:9px;background:#080d18}.media-preview.multi img{width:clamp(130px,28vw,230px);height:190px;object-fit:cover}.media-preview video{display:block;width:min(100%,620px);max-height:380px;background:#05070c;border-radius:9px}.media-empty{color:var(--muted);font-size:13px;margin:12px 0}.caption-label{display:block;color:var(--muted);font-size:13px;margin:14px 0 5px}.caption-editor{display:block;width:100%;min-height:110px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);font:inherit;line-height:1.5}.original-caption{margin:8px 0;color:var(--muted);font-size:13px}.original-caption div{white-space:pre-wrap;margin-top:7px}.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px}
+.media-preview{margin:14px 0;display:flex;gap:9px;align-items:flex-start;flex-wrap:wrap}.media-preview img{display:block;max-width:100%;width:auto;max-height:320px;object-fit:contain;border-radius:9px;background:#080d18}.media-preview.multi img{width:clamp(130px,28vw,230px);height:190px;object-fit:cover}.media-preview video{display:block;width:min(100%,620px);max-height:380px;background:#05070c;border-radius:9px}.media-empty{color:var(--muted);font-size:13px;margin:12px 0}.caption-label{display:block;color:var(--muted);font-size:13px;margin:14px 0 5px}.caption-editor{display:block;width:100%;min-height:110px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);font:inherit;line-height:1.5}.original-caption{margin:8px 0;color:var(--muted);font-size:13px}.original-caption div{white-space:pre-wrap;margin-top:7px}.rejection-editor{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0c1425}.rejection-editor label{display:block;color:var(--muted);font-size:13px;margin-bottom:6px}.rejection-editor textarea{display:block;width:100%;min-height:85px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:#101a2e;color:var(--text);font:inherit}.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px}
 .actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.error{color:#ff9a9a;margin-top:10px}.hidden{display:none!important}
 #notice{margin:12px 0;color:var(--muted)}a{color:#a9bdff;overflow-wrap:anywhere}
 @media(max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding:20px 14px}.top{align-items:flex-start}}
@@ -402,10 +402,29 @@ $("queue").addEventListener("click",async e=>{const b=e.target.closest("button[d
   catch(err){$("notice").textContent=err.message;b.disabled=false}
   return;
  }
- if(action==="reject"&&!confirm("Reject this content item?"))return;
+ if(action==="reject"){
+  const card=b.closest(".item");
+  if(!card)return;
+  if(card.querySelector(".rejection-editor"))return;
+  const editor=document.createElement("div");
+  editor.className="rejection-editor";
+  editor.innerHTML='<label for="rejection-'+esc(id)+'">Comments / changes required</label><textarea id="rejection-'+esc(id)+'" maxlength="2000" placeholder="Explain what the client needs to change before resubmitting…"></textarea><div class="actions"><button data-action="submit-rejection" data-id="'+esc(id)+'">Send feedback &amp; reject</button><button class="secondary" data-action="cancel-rejection" data-id="'+esc(id)+'">Cancel</button></div>';
+  b.closest(".actions").insertAdjacentElement("afterend",editor);
+  editor.querySelector("textarea").focus();
+  return;
+ }
+ if(action==="cancel-rejection"){b.closest(".rejection-editor")?.remove();return}
+ if(action==="submit-rejection"){
+  const reason=$("rejection-"+id)?.value.trim()||"";
+  if(!reason){$("notice").textContent="Please add comments describing the required changes.";return}
+  b.disabled=true;$("notice").textContent="Sending feedback and rejecting…";
+  try{await api("/api/approval/"+encodeURIComponent(id)+"/reject",{method:"POST",body:JSON.stringify({reviewed_by:"dashboard",reason})});await load()}
+  catch(err){$("notice").textContent=err.message;b.disabled=false}
+  return;
+ }
  if(action==="approve"&&!confirm("Approve and publish this content now?"))return;
- b.disabled=true;$("notice").textContent=action==="approve"?"Publishing…":"Rejecting…";
- try{await api("/api/approval/"+encodeURIComponent(id)+"/"+action,{method:"POST",body:JSON.stringify({reviewed_by:"dashboard"})});await load()}
+ b.disabled=true;$("notice").textContent="Publishing…";
+ try{await api("/api/approval/"+encodeURIComponent(id)+"/approve",{method:"POST",body:JSON.stringify({reviewed_by:"dashboard"})});await load()}
  catch(err){$("notice").textContent=err.message;b.disabled=false}
 });
 (async()=>{try{await api("/api/dashboard/me");showApp();await load()}catch{showLogin()}})();
