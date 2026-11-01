@@ -407,14 +407,14 @@ function itemHtml(x,actions=false){
     '<div class="actions"><button class="secondary" data-action="save-caption" data-id="'+esc(x.id)+'">▣ &nbsp;Save changes</button><button data-action="approve" data-id="'+esc(x.id)+'">✓ &nbsp;Confirm publication</button><button class="danger" data-action="reject" data-id="'+esc(x.id)+'">× &nbsp;Reject</button></div>'
   : '<div class="caption">'+esc(p.caption||"(No caption)")+'</div>';
  const platform=(p.platforms||[]).join(", ")||"—";
- const url=x.publish_response?.url||x.publish_response?.post_url||x.publish_response?.results?.instagram?.url||"";
+ const url=x.publish_response?.url||x.publish_response?.post_url||x.publish_response?.results?.instagram?.url||x.publish_response?.results?.facebook?.url||x.publish_response?.results?.youtube?.url||x.publish_response?.results?.linkedin?.url||"";
  return '<article class="item approval-card"><div class="item-top"><strong>'+esc(p.user||x.submitted_by||"Content item")+'</strong><span class="platform-tag">◎ &nbsp;'+esc(platform)+'</span><span class="submitted">Submitted: '+esc(x.submitted_at?new Date(x.submitted_at).toLocaleString():"—")+'</span></div><div class="approval-media">'+media+'</div><div class="approval-content">'+captionEditor+'<div class="meta">'+(x.review_note?'<span class="error">'+esc(x.review_note)+'</span>':"")+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener">View published post</a>':"")+'</div></div></article>';
 }
 function activityHtml(x){
  const p=x.payload||{};
  const status=x.status||"";
  const platform=(p.platforms||[]).map(v=>String(v).toLowerCase()).join(" ");
- const platformIcon=platform.includes("instagram")?'<span class="social-icon instagram">◎</span>':platform.includes("facebook")?'<span class="social-icon facebook">f</span>':'<span class="social-icon other">●</span>';
+ const platformIcon=platform.includes("instagram")?'<span class="social-icon instagram">◎</span>':platform.includes("facebook")?'<span class="social-icon facebook">f</span>':platform.includes("youtube")?'<span class="social-icon youtube">▶</span>':platform.includes("linkedin")?'<span class="social-icon linkedin">in</span>':'<span class="social-icon other">●</span>';
  const title=p.caption||p.user||x.request_id||"Content update";
  const date=x.updated_at||x.submitted_at;
  const url=x.publish_response?.url||x.publish_response?.post_url||x.publish_response?.results?.instagram?.url||"";
@@ -785,6 +785,16 @@ app.post("/api/approval/submit", async (request, reply) => {
       success: false,
       error: "Provide either media_urls (photo URLs) or video_url, but not both"
     });
+  }
+
+  const requestedPlatforms = platforms.map(p => p.trim().toLowerCase());
+
+  if (requestedPlatforms.includes("youtube") && !videoUrl) {
+    return reply.code(400).send({ success: false, error: "YouTube publishing requires video_url; photo uploads are not supported for YouTube" });
+  }
+
+  if (requestedPlatforms.includes("youtube") && !String(body.caption || "").trim()) {
+    return reply.code(400).send({ success: false, error: "A non-empty caption/title is required when publishing to YouTube" });
   }
 
   if (mediaUrls.length > 20) {
