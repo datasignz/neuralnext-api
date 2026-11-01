@@ -195,8 +195,12 @@ async function initializeDatabase() {
     )
   `);
 
+  await pool.query("ALTER TABLE approval_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ");
   await pool.query(
     "CREATE INDEX IF NOT EXISTS approval_items_status_submitted_idx ON approval_items (status, submitted_at DESC)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS approval_items_deleted_at_idx ON approval_items (deleted_at)"
   );
 }
 
@@ -373,8 +377,9 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 <div class="stats" id="stats"></div>
 <div id="notice" role="status"></div>
 <div class="dashboard-columns">
-<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="m8 12 3 3L22 4"/></svg></span><div><h2>Pending Approvals (<span id="pendingCount">0</span>)</h2><p>Review, edit and approve content for publishing</p></div></div><div class="dashboard-panel-body" id="queue"></div></section>
-<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div><h2>Recent Activity</h2><p>Latest approvals, publications and updates</p></div></div><div class="dashboard-panel-body activity-list" id="recent"></div></section>
+<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="m8 12 3 3L22 4"/></svg></span><div><h2>Active</h2><p>Pending approvals, publishing and scheduled posts</p></div></div><div class="dashboard-panel-body"><h3>Pending Approvals (<span id="pendingCount">0</span>)</h3><div id="queue"></div><h3>In Progress &amp; Scheduled</h3><div id="activeList"></div></div></section>
+<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div><h2>History</h2><p>Published, failed and rejected posts</p></div></div><div class="dashboard-panel-body"><div class="activity-list" id="recent"></div><div id="historyList"></div></div></section>
+<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></span><div><h2>Trash (<span id="trashCount">0</span>)</h2><p>Restore archived failed or rejected posts</p></div></div><div class="dashboard-panel-body" id="trashList"></div></section>
 </div>
 </main>
 </div>
@@ -434,10 +439,18 @@ async function load(){
    const count=k==="publishing"?(totals.publishing||0)+(totals.submitted||0):(totals[k]||0);
    return '<div class="stat '+k+'"><span class="stat-icon">'+statIcons[k]+'</span><div><div class="num">'+count+'</div><div class="label">'+v+'</div></div></div>';
   }).join("");
-  const pending=(d.items||[]).filter(x=>x.status==="pending_approval");
+  const allItems=d.items||[];
+  const pending=allItems.filter(x=>x.status==="pending_approval");
+  const active=allItems.filter(x=>["publishing","submitted","scheduled"].includes(x.status));
+  const history=allItems.filter(x=>["published","failed","rejected"].includes(x.status));
+  const trash=d.trash_items||[];
   $("pendingCount").textContent=pending.length;
-  $("queue").innerHTML=pending.length?pending.map(x=>itemHtml(x,!readOnly)).join(""):'<div class="panel muted">No items waiting for approval.</div>';
-  $("recent").innerHTML=(d.items||[]).length?d.items.slice(0,8).map(x=>activityHtml(x)).join(""):'<div class="muted">No activity yet.</div>';
+  $("queue").innerHTML=pending.length?pending.map(x=>itemHtml(x,!readOnly)).join(""):'<div class="muted">No items waiting for approval.</div>';
+  $("activeList").innerHTML=active.length?active.map(x=>'<article class="item">'+activityHtml(x)+'</article>').join(""):'<div class="muted">No posts currently publishing or scheduled.</div>';
+  $("recent").innerHTML=history.length?history.slice(0,8).map(x=>activityHtml(x)).join(""):'<div class="muted">No history yet.</div>';
+  $("historyList").innerHTML=history.length?history.map(x=>'<article class="item">'+itemHtml(x,false)+(readOnly?'':'<div class="actions">'+(x.status==="failed"||x.status==="rejected"?'<button class="danger" data-action="trash" data-id="'+esc(x.id)+'">Move to Trash</button>':'')+'</div>')+'</article>').join(""):'';
+  $("trashCount").textContent=trash.length;
+  $("trashList").innerHTML=trash.length?trash.map(x=>'<article class="item">'+itemHtml(x,false)+'<div class="meta">Moved to Trash: '+esc(x.deleted_at?new Date(x.deleted_at).toLocaleString():"—")+'</div>'+(readOnly?'':'<div class="actions"><button class="secondary" data-action="restore" data-id="'+esc(x.id)+'">Restore</button></div>')+'</article>').join(""):'<div class="muted">Trash is empty.</div>';
   $("notice").textContent="Last updated: "+new Date(d.generated_at).toLocaleString();
  }catch(e){$("notice").textContent=e.message}
 }
@@ -448,8 +461,16 @@ $("loginForm").addEventListener("submit",async e=>{e.preventDefault();$("loginBu
 $("logout").addEventListener("click",async()=>{try{await api("/api/dashboard/logout",{method:"POST",body:"{}"})}finally{window.dashboardGuestMode=false;showLogin()}});
 $("refresh").addEventListener("click",load);
 $("clientSelect").addEventListener("change",load);
-$("queue").addEventListener("change",e=>{if(e.target.matches('input[type="radio"][name^="publish-mode-"]')){const id=e.target.name.slice("publish-mode-".length);$("schedule-time-"+id)?.classList.toggle("hidden",e.target.value!=="schedule")}});
-$("queue").addEventListener("click",async e=>{const b=e.target.closest("button[data-action]");if(!b)return;const action=b.dataset.action;const id=b.dataset.id;
+document.addEventListener("change",e=>{if(e.target.matches('input[type="radio"][name^="publish-mode-"]')){const id=e.target.name.slice("publish-mode-".length);$("schedule-time-"+id)?.classList.toggle("hidden",e.target.value!=="schedule")}});
+document.addEventListener("click",async e=>{const b=e.target.closest("button[data-action]");if(!b)return;const action=b.dataset.action;const id=b.dataset.id;
+ if(action==="trash"||action==="restore"){
+  const message=action==="trash"?"Move this post to Trash?":"Restore this post from Trash?";
+  if(!confirm(message))return;
+  b.disabled=true;
+  try{await api("/api/approval/"+encodeURIComponent(id)+"/"+action,{method:"POST",body:"{}"});await load()}
+  catch(err){$("notice").textContent=err.message;b.disabled=false}
+  return;
+ }
  if(action==="save-caption"){
   const field=$("caption-"+id);if(!field)return;
   b.disabled=true;$("notice").textContent="Saving caption…";
@@ -956,8 +977,21 @@ app.get("/api/dashboard/overview", async (request, reply) => {
               publish_response
        FROM approval_items
        WHERE COALESCE(payload->>'client_name', 'Datasignz CreativeMinds') = $1
+         AND deleted_at IS NULL
        ORDER BY submitted_at DESC
-       LIMIT 50`,
+       LIMIT 100`,
+      [client]
+    );
+
+    const trash = await pool.query(
+      `SELECT id, request_id, status, payload, submitted_by, reviewed_by,
+              review_note, submitted_at, reviewed_at, updated_at, deleted_at,
+              upload_post_job_id, upload_post_request_id, publish_response
+       FROM approval_items
+       WHERE COALESCE(payload->>'client_name', 'Datasignz CreativeMinds') = $1
+         AND deleted_at IS NOT NULL
+       ORDER BY deleted_at DESC
+       LIMIT 100`,
       [client]
     );
 
@@ -981,7 +1015,8 @@ app.get("/api/dashboard/overview", async (request, reply) => {
       client,
       totals: summary,
       total_items: Object.values(summary).reduce((sum, value) => sum + value, 0),
-      items: recent.rows
+      items: recent.rows,
+      trash_items: trash.rows
     };
   } catch (error) {
     request.log.error({ err: error }, "Dashboard overview query failed");
@@ -989,6 +1024,47 @@ app.get("/api/dashboard/overview", async (request, reply) => {
       success: false,
       error: "Could not load dashboard overview"
     });
+  }
+});
+
+
+// Soft-delete a failed or rejected post into the client's Trash.
+app.post("/api/approval/:id/trash", async (request, reply) => {
+  if (!requireReviewAccess(request, reply)) return;
+  if (!requireDb(reply)) return;
+  try {
+    const result = await pool.query(
+      `UPDATE approval_items SET deleted_at=NOW(), updated_at=NOW()
+       WHERE id=$1 AND deleted_at IS NULL AND status IN ('failed','rejected')
+       RETURNING id, status, deleted_at`,
+      [request.params.id]
+    );
+    if (!result.rowCount) return reply.code(409).send({success:false,error:"Only failed or rejected posts can be moved to Trash"});
+    return {success:true,item:result.rows[0]};
+  } catch(error) {
+    if(error.code==="22P02") return reply.code(400).send({success:false,error:"Invalid approval ID"});
+    request.log.error({err:error},"Move to Trash failed");
+    return reply.code(500).send({success:false,error:"Could not move post to Trash"});
+  }
+});
+
+// Restore a post from Trash to its previous failed or rejected status.
+app.post("/api/approval/:id/restore", async (request, reply) => {
+  if (!requireReviewAccess(request, reply)) return;
+  if (!requireDb(reply)) return;
+  try {
+    const result = await pool.query(
+      `UPDATE approval_items SET deleted_at=NULL, updated_at=NOW()
+       WHERE id=$1 AND deleted_at IS NOT NULL AND status IN ('failed','rejected')
+       RETURNING id, status, deleted_at`,
+      [request.params.id]
+    );
+    if (!result.rowCount) return reply.code(409).send({success:false,error:"Post not found in Trash"});
+    return {success:true,item:result.rows[0]};
+  } catch(error) {
+    if(error.code==="22P02") return reply.code(400).send({success:false,error:"Invalid approval ID"});
+    request.log.error({err:error},"Restore from Trash failed");
+    return reply.code(500).send({success:false,error:"Could not restore post"});
   }
 });
 
