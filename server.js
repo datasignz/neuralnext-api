@@ -380,7 +380,7 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 </div>
 <script>
 const $=id=>document.getElementById(id);
-const labels={pending_approval:"Pending Approval",publishing:"Publishing",scheduled:"Scheduled",published:"Published",failed:"Failed",rejected:"Rejected"};
+const labels={pending_approval:"PendingApproval",publishing:"Publishing",scheduled:"Scheduled",published:"Published",failed:"Failed",rejected:"Rejected"};
 async function api(path,options={}){const r=await fetch(path,{...options,credentials:"same-origin",headers:{"Content-Type":"application/json",...(options.headers||{})}});let d={};try{d=await r.json()}catch{}if(r.status===401){showLogin();throw new Error("Your session has expired. Please sign in again.")}if(!r.ok)throw new Error(d.error||"Request failed");return d}
 function showLogin(){ $("login").classList.remove("hidden");$("app").classList.add("hidden");$("logout").classList.add("hidden");}
 function showApp(isGuest=false){ $("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");$("guestNote").classList.toggle("hidden",!isGuest);window.dashboardGuestMode=isGuest;}
