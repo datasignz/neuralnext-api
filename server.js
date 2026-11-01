@@ -340,10 +340,10 @@ button{border:0;border-radius:9px;padding:10px 15px;font-weight:650;cursor:point
 button.secondary{background:#293650;color:var(--text)}button.danger{background:#522b38;color:#ffdce2}button:disabled{opacity:.5;cursor:wait}
 .stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin:18px 0 24px}
 .stat{display:flex;align-items:center;gap:14px;min-height:96px;padding:16px 18px;border-radius:13px;background:linear-gradient(135deg,#1b2940,#182337);border:1px solid #315078;position:relative}
-.stat:after{content:"›";margin-left:auto;color:#b9c8da;font-size:28px}.stat .stat-icon{width:38px;flex:0 0 38px;text-align:center;font-size:31px}.stat .num{font-size:30px;font-weight:780;line-height:1.05}.stat .label{color:#e1e8f4;font-size:14px;white-space:nowrap}
+.stat:after{content:"›";margin-left:auto;color:#b9c8da;font-size:28px}.stat .stat-icon{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center}.stat .stat-icon svg{width:36px;height:36px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.stat .stat-icon svg .dot{fill:currentColor;stroke:none}.stat .num{font-size:30px;font-weight:780;line-height:1.05}.stat .label{color:#e1e8f4;font-size:14px;white-space:nowrap}
 .stat.pending_approval{background:linear-gradient(135deg,#3a2c50,#29233d);border-color:#9c65d5}.stat.pending_approval .stat-icon{color:#c58aff}.stat.publishing{border-color:#2879bd}.stat.publishing .stat-icon{color:#57b8ef}.stat.scheduled{border-color:#168db0}.stat.scheduled .stat-icon{color:#53d9f1}.stat.published{background:linear-gradient(135deg,#123e39,#173b38);border-color:#169d76}.stat.published .stat-icon{color:#42d9a0}.stat.failed{background:linear-gradient(135deg,#49252d,#38242c);border-color:#c23c48}.stat.failed .stat-icon{color:#ff6565}.stat.rejected{border-color:#586879}.stat.rejected .stat-icon{color:#b9c5d3}
 .section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:25px 0 12px}
-.dashboard-columns{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(330px,1fr);gap:22px;align-items:start}.dashboard-panel{background:linear-gradient(145deg,#182435,#121c2b);border:1px solid #34465c;border-radius:13px;overflow:hidden;min-width:0}.dashboard-panel-head{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid #34465c}.dashboard-panel-head .head-icon{font-size:27px;color:#dbe7f4}.dashboard-panel-head h2{font-size:17px;margin:0;font-weight:750}.dashboard-panel-head p{margin:0;color:#c0cada;font-size:13px}.dashboard-panel-body{padding:0 14px 14px}
+.dashboard-columns{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(330px,1fr);gap:22px;align-items:start}.dashboard-panel{background:linear-gradient(145deg,#182435,#121c2b);border:1px solid #34465c;border-radius:13px;overflow:hidden;min-width:0}.dashboard-panel-head{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid #34465c}.dashboard-panel-head .head-icon{width:28px;height:28px;flex:0 0 28px;color:#dbe7f4}.dashboard-panel-head .head-icon svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dashboard-panel-head h2{font-size:17px;margin:0;font-weight:750}.dashboard-panel-head p{margin:0;color:#c0cada;font-size:13px}.dashboard-panel-body{padding:0 14px 14px}
 .item{border:1px solid #34465c;border-radius:12px;padding:17px;margin:10px 0;background:linear-gradient(145deg,#1c293a,#172333)}
 .approval-card{display:grid;grid-template-columns:minmax(180px,28%) minmax(0,1fr);gap:18px}.approval-media .media-preview{margin:0}.approval-media .media-preview img{width:100%;height:175px;max-height:210px;object-fit:cover}.approval-media .media-preview video{width:100%;max-height:210px}.approval-content{min-width:0}.approval-content .item-top{justify-content:flex-start;flex-wrap:wrap;margin-bottom:10px}.approval-content .submitted{margin-left:auto;color:#bdc9d8;font-size:12px}.platform-tag{background:#29394d;border:1px solid #40546b;border-radius:9px;padding:3px 9px;font-size:12px}.caption-editor{min-height:78px;background:#111b2b;border-color:#8291a3}.actions button{padding:9px 13px}.actions button:not(.secondary):not(.danger){background:#087c5c;color:white;border:1px solid #1bb88b}.actions .danger{background:#632c36;color:#fff;border:1px solid #d54a55}.actions .secondary{background:#2a3c52;color:#fff;border:1px solid #7890a8}
 .activity-list{padding-top:4px}.activity-row{display:flex;align-items:center;gap:10px;min-height:51px;border-bottom:1px solid #34465c;font-size:12px}.activity-status{min-width:84px;text-align:center;padding:4px 7px;border-radius:18px;background:#26384b;color:#e6edf5}.activity-status.published{background:#15533f;color:#c4f5df;border:1px solid #258a67}.activity-status.rejected,.activity-status.failed{background:#512b34;color:#ffd7dc;border:1px solid #8d3b49}.social-icon{width:23px;height:23px;display:grid;place-items:center;border-radius:50%;font-weight:800;font-size:17px;flex:0 0 23px}.social-icon.instagram{background:linear-gradient(135deg,#6c39c6,#f04478,#ffad47);color:white}.social-icon.facebook{background:#1877f2;color:white;font-family:Arial}.social-icon.other{background:#40546b;color:white}.activity-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.activity-row time{white-space:nowrap;color:#c1ccda}.activity-link{color:#d8e4f3;font-size:17px;text-decoration:none}
@@ -373,14 +373,14 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 <div class="stats" id="stats"></div>
 <div id="notice" role="status"></div>
 <div class="dashboard-columns">
-<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon">☑</span><div><h2>Pending Approvals (<span id="pendingCount">0</span>)</h2><p>Review, edit and approve content for publishing</p></div></div><div class="dashboard-panel-body" id="queue"></div></section>
-<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon">◷</span><div><h2>Recent Activity</h2><p>Latest approvals, publications and updates</p></div></div><div class="dashboard-panel-body activity-list" id="recent"></div></section>
+<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="m8 12 3 3L22 4"/></svg></span><div><h2>Pending Approvals (<span id="pendingCount">0</span>)</h2><p>Review, edit and approve content for publishing</p></div></div><div class="dashboard-panel-body" id="queue"></div></section>
+<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div><h2>Recent Activity</h2><p>Latest approvals, publications and updates</p></div></div><div class="dashboard-panel-body activity-list" id="recent"></div></section>
 </div>
 </main>
 </div>
 <script>
 const $=id=>document.getElementById(id);
-const labels={pending_approval:"Pending approval",publishing:"Publishing",submitted:"Submitted",scheduled:"Scheduled",published:"Published",failed:"Failed",rejected:"Rejected"};
+const labels={pending_approval:"Pending Approval",publishing:"Publishing",scheduled:"Scheduled",published:"Published",failed:"Failed",rejected:"Rejected"};
 async function api(path,options={}){const r=await fetch(path,{...options,credentials:"same-origin",headers:{"Content-Type":"application/json",...(options.headers||{})}});let d={};try{d=await r.json()}catch{}if(r.status===401){showLogin();throw new Error("Your session has expired. Please sign in again.")}if(!r.ok)throw new Error(d.error||"Request failed");return d}
 function showLogin(){ $("login").classList.remove("hidden");$("app").classList.add("hidden");$("logout").classList.add("hidden");}
 function showApp(isGuest=false){ $("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");$("guestNote").classList.toggle("hidden",!isGuest);window.dashboardGuestMode=isGuest;}
@@ -420,8 +420,18 @@ async function load(){
   const d=await api("/api/dashboard/overview");
   const readOnly=Boolean(window.dashboardGuestMode);
   const totals=d.totals||{};
-  const statIcons={pending_approval:"➤",publishing:"◌",scheduled:"▦",published:"✓",failed:"⚠",rejected:"⊗"};
-  $("stats").innerHTML=Object.entries(labels).map(([k,v])=>'<div class="stat '+k+'"><span class="stat-icon">'+statIcons[k]+'</span><div><div class="num">'+(totals[k]||0)+'</div><div class="label">'+v+'</div></div></div>').join("");
+  const statIcons={
+   pending_approval:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 21 3l-6.5 18-3.2-7.3L3 11.5Z"/><path d="m11.3 13.7 4.4-4.4"/></svg>',
+   publishing:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke-dasharray="2 4"/><circle cx="12" cy="3.5" r="1.5" class="dot"/></svg>',
+   scheduled:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 10h18M8 14h3M8 17h6"/></svg>',
+   published:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m7.5 12.2 3 3 6-6.5"/></svg>',
+   failed:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.8 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.8a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17h.01"/></svg>',
+   rejected:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg>'
+  };
+  $("stats").innerHTML=Object.entries(labels).map(([k,v])=>{
+   const count=k==="publishing"?(totals.publishing||0)+(totals.submitted||0):(totals[k]||0);
+   return '<div class="stat '+k+'"><span class="stat-icon">'+statIcons[k]+'</span><div><div class="num">'+count+'</div><div class="label">'+v+'</div></div></div>';
+  }).join("");
   const pending=(d.items||[]).filter(x=>x.status==="pending_approval");
   $("pendingCount").textContent=pending.length;
   $("queue").innerHTML=pending.length?pending.map(x=>itemHtml(x,!readOnly)).join(""):'<div class="panel muted">No items waiting for approval.</div>';
