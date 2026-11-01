@@ -321,7 +321,7 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 .item{border:1px solid var(--line);border-radius:12px;padding:17px;margin:10px 0;background:#10182a}
 .item-top{display:flex;justify-content:space-between;gap:12px;align-items:center}.pill{font-size:12px;padding:4px 9px;border-radius:20px;background:#273650;color:#d9e3fa}
 .pill.pending_approval{background:#514122;color:#ffe2a1}.pill.published{background:#164632;color:#a7f0ca}.pill.failed{background:#542b35;color:#ffc1c1}
-.media-preview{margin:14px 0;display:flex;gap:9px;align-items:flex-start;flex-wrap:wrap}.media-preview img{display:block;max-width:100%;width:auto;max-height:320px;object-fit:contain;border-radius:9px;background:#080d18}.media-preview.multi img{width:clamp(130px,28vw,230px);height:190px;object-fit:cover}.media-preview video{display:block;width:min(100%,620px);max-height:380px;background:#05070c;border-radius:9px}.media-empty{color:var(--muted);font-size:13px;margin:12px 0}.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px}
+.media-preview{margin:14px 0;display:flex;gap:9px;align-items:flex-start;flex-wrap:wrap}.media-preview img{display:block;max-width:100%;width:auto;max-height:320px;object-fit:contain;border-radius:9px;background:#080d18}.media-preview.multi img{width:clamp(130px,28vw,230px);height:190px;object-fit:cover}.media-preview video{display:block;width:min(100%,620px);max-height:380px;background:#05070c;border-radius:9px}.media-empty{color:var(--muted);font-size:13px;margin:12px 0}.caption-label{display:block;color:var(--muted);font-size:13px;margin:14px 0 5px}.caption-editor{display:block;width:100%;min-height:110px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);font:inherit;line-height:1.5}.original-caption{margin:8px 0;color:var(--muted);font-size:13px}.original-caption div{white-space:pre-wrap;margin-top:7px}.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px}
 .actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.error{color:#ff9a9a;margin-top:10px}.hidden{display:none!important}
 #notice{margin:12px 0;color:var(--muted)}a{color:#a9bdff;overflow-wrap:anywhere}
 @media(max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding:20px 14px}.top{align-items:flex-start}}
@@ -362,13 +362,18 @@ function itemHtml(x,actions=false){
   : (photos.length
     ? '<div class="media-preview '+(photos.length>1?'multi':'')+'">'+photos.map((u,i)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener"><img src="'+esc(u)+'" alt="Post image '+(i+1)+'" loading="lazy"></a>').join("")+'</div>'
     : '<div class="media-empty">No media attached</div>');
+ const original=p.original_caption;
+ const captionEditor=actions
+  ? '<label class="caption-label" for="caption-'+esc(x.id)+'">Edit post caption</label><textarea class="caption-editor" id="caption-'+esc(x.id)+'" maxlength="10000">'+esc(p.caption||"")+'</textarea>'+
+    (original!==undefined&&original!==p.caption?'<details class="original-caption"><summary>View original AI caption</summary><div>'+esc(original)+'</div></details>':"")+
+    '<div class="actions"><button class="secondary" data-action="save-caption" data-id="'+esc(x.id)+'">Save changes</button><button data-action="approve" data-id="'+esc(x.id)+'">Approve &amp; publish</button><button class="danger" data-action="reject" data-id="'+esc(x.id)+'">Reject</button></div>'
+  : '<div class="caption">'+esc(p.caption||"(No caption)")+'</div>';
  const url=x.publish_response?.url||x.publish_response?.post_url||x.publish_response?.results?.instagram?.url||"";
  return '<article class="item"><div class="item-top"><strong>'+esc(p.user||x.submitted_by||"Content item")+'</strong><span class="pill '+esc(x.status)+'">'+esc(labels[x.status]||x.status)+'</span></div>'+
- media+
- '<div class="caption">'+esc(p.caption||"(No caption)")+'</div><div class="meta"><span>Platforms: '+esc((p.platforms||[]).join(", ")||"—")+'</span><span>Submitted: '+esc(x.submitted_at?new Date(x.submitted_at).toLocaleString():"—")+'</span></div>'+
+ media+captionEditor+
+ '<div class="meta"><span>Platforms: '+esc((p.platforms||[]).join(", ")||"—")+'</span><span>Submitted: '+esc(x.submitted_at?new Date(x.submitted_at).toLocaleString():"—")+'</span></div>'+
  (x.review_note?'<p class="error">'+esc(x.review_note)+'</p>':"")+
  (url?'<p><a href="'+esc(url)+'" target="_blank" rel="noopener">View published post</a></p>':"")+
- (actions?'<div class="actions"><button data-action="approve" data-id="'+esc(x.id)+'">Approve &amp; publish</button><button class="danger" data-action="reject" data-id="'+esc(x.id)+'">Reject</button></div>':"")+
  '</article>';
 }
 async function load(){
@@ -390,6 +395,13 @@ $("loginForm").addEventListener("submit",async e=>{e.preventDefault();$("loginBu
 $("logout").addEventListener("click",async()=>{try{await api("/api/dashboard/logout",{method:"POST",body:"{}"})}finally{showLogin()}});
 $("refresh").addEventListener("click",load);
 $("queue").addEventListener("click",async e=>{const b=e.target.closest("button[data-action]");if(!b)return;const action=b.dataset.action;const id=b.dataset.id;
+ if(action==="save-caption"){
+  const field=$("caption-"+id);if(!field)return;
+  b.disabled=true;$("notice").textContent="Saving caption…";
+  try{await api("/api/approval/"+encodeURIComponent(id)+"/caption",{method:"POST",body:JSON.stringify({caption:field.value})});$("notice").textContent="Caption saved.";await load()}
+  catch(err){$("notice").textContent=err.message;b.disabled=false}
+  return;
+ }
  if(action==="reject"&&!confirm("Reject this content item?"))return;
  if(action==="approve"&&!confirm("Approve and publish this content now?"))return;
  b.disabled=true;$("notice").textContent=action==="approve"?"Publishing…":"Rejecting…";
@@ -761,6 +773,56 @@ app.post("/api/approval/submit", async (request, reply) => {
   }
 });
 
+
+
+// Edit a pending post caption before approval. Preserve the first submitted caption for audit.
+app.post("/api/approval/:id/caption", async (request, reply) => {
+  if (!requireReviewAccess(request, reply)) return;
+  if (!requireDb(reply)) return;
+
+  const caption = request.body?.caption;
+  if (typeof caption !== "string" || caption.length > 10000) {
+    return reply.code(400).send({
+      success: false,
+      error: "caption must be text no longer than 10,000 characters"
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE approval_items
+       SET payload = jsonb_set(
+         CASE
+           WHEN payload ? 'original_caption' THEN payload
+           ELSE payload || jsonb_build_object('original_caption', COALESCE(payload->>'caption', ''))
+         END,
+         '{caption}',
+         to_jsonb($2::text),
+         true
+       ),
+       updated_at = NOW()
+       WHERE id = $1 AND status = 'pending_approval'
+       RETURNING id, status, payload->>'caption' AS caption,
+                 payload->>'original_caption' AS original_caption, updated_at`,
+      [request.params.id, caption]
+    );
+
+    if (!result.rowCount) {
+      return reply.code(409).send({
+        success: false,
+        error: "Item not found or no longer pending approval"
+      });
+    }
+
+    return { success: true, item: result.rows[0] };
+  } catch (error) {
+    if (error.code === "22P02") {
+      return reply.code(400).send({ success: false, error: "Invalid approval ID" });
+    }
+    request.log.error({ err: error }, "Caption update failed");
+    return reply.code(500).send({ success: false, error: "Could not save caption" });
+  }
+});
 
 // Dashboard overview: status counts and latest approval/publication records.
 app.get("/api/dashboard/overview", async (request, reply) => {
