@@ -60,7 +60,7 @@ function hasDashboardSession(request) {
 
 function requireReviewAccess(request, reply) {
   if (hasDashboardSession(request)) return true;
-  return requireReviewAccess(request, reply);
+  return requireKey(request, reply, "APPROVAL_REVIEW_KEY");
 }
 
 function requireKey(request, reply, envName) {
