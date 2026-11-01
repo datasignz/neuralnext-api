@@ -21,6 +21,7 @@ function secretMatches(provided, expected) {
 
 
 const dashboardCookieName = "nn_dashboard_session";
+const guestCookieName = "nn_guest_session";
 const dashboardSessionLifetimeSeconds = 8 * 60 * 60;
 const dashboardLoginAttempts = new Map();
 
@@ -56,6 +57,28 @@ function hasDashboardSession(request) {
     .update(`neuralnext-dashboard:${expiresAt}`)
     .digest("hex");
   return safeStringMatch(suppliedSignature || "", expected);
+}
+
+function hasGuestSession(request) {
+  const secret = process.env.DASHBOARD_SESSION_SECRET;
+  if (!secret) return false;
+  const cookieHeader = request.headers.cookie || "";
+  const cookie = cookieHeader.split(";").map(part => part.trim())
+    .find(part => part.startsWith(`${guestCookieName}=`));
+  if (!cookie) return false;
+  const value = decodeURIComponent(cookie.slice(guestCookieName.length + 1));
+  const [expiryText, suppliedSignature] = value.split(".");
+  const expiresAt = Number(expiryText);
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) return false;
+  const expected = createHmac("sha256", secret)
+    .update(`neuralnext-guest:${expiresAt}`)
+    .digest("hex");
+  return safeStringMatch(suppliedSignature || "", expected);
+}
+
+function requireDashboardReadAccess(request, reply) {
+  if (hasDashboardSession(request) || hasGuestSession(request)) return true;
+  return requireKey(request, reply, "APPROVAL_REVIEW_KEY");
 }
 
 function requireReviewAccess(request, reply) {
@@ -304,12 +327,12 @@ app.get("/dashboard", async (request, reply) => {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NeuralNext Engage — Dashboard</title>
+<title>NeuralNext Engage - Dashboard</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1020;--panel:#141c30;--line:#27334d;--muted:#9aa8c2;--text:#f3f6fc;--accent:#7c9cff;--green:#39c98a;--red:#ff7272;--amber:#f5bd54}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,Segoe UI,sans-serif}
 .wrap{max-width:1180px;margin:auto;padding:28px 22px}.dashboard-banner{width:100%;margin:0 0 22px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#080d18}.dashboard-banner img{display:block;width:100%;height:clamp(150px,22vw,280px);object-fit:cover;object-position:center top}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px}
-.brand{font-size:22px;font-weight:750;letter-spacing:-.5px}.brand span{color:var(--accent)}.muted{color:var(--muted)}
+.brand{font-size:22px;font-weight:750;letter-spacing:-.5px}.brand span{color:var(--accent)}.muted{color:var(--muted)}.guest-note{padding:10px 13px;border:1px solid #49617e;border-radius:9px;background:#14243a;color:#c9dcf5;margin:12px 0 18px}
 .panel,.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
 .login{max-width:420px;margin:9vh auto}.login h1{margin:0 0 8px;font-size:25px}
 input,button,select{font:inherit}input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);margin:7px 0 15px}
@@ -330,14 +353,15 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 <body>
 <div class="wrap">
 <div class="dashboard-banner"><img src="https://raw.githubusercontent.com/datasignz/neuralnext-api/main/neuralnext-banner.jpg" alt="NeuralNext global connectivity banner"></div>
-<header class="top"><div class="brand">NeuralNext <span>Engage</span></div><button id="logout" class="secondary hidden">Log out</button></header>
+<header class="top"><div class="brand">NeuralNext <span>Engage</span> - Dashboard</div><button id="logout" class="secondary hidden">Log out</button></header>
 <section id="login" class="panel login">
 <h1>Dashboard login</h1><p class="muted">Sign in to manage content approvals and publishing.</p>
 <form id="loginForm"><label for="username">Username</label><input id="username" autocomplete="username" required>
 <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
-<button type="submit" id="loginButton">Sign in</button><div id="loginError" class="error"></div></form>
+<button type="submit" id="loginButton">Sign in</button><button type="button" id="guestButton" class="secondary" style="margin-left:8px">Continue as guest</button><div id="loginError" class="error"></div></form>
 </section>
 <main id="app" class="hidden">
+<div id="guestNote" class="guest-note hidden">Guest view: you can browse dashboard content, but approving, rejecting and saving changes are disabled.</div>
 <div class="section-head"><div><h1 style="margin:0">Overview</h1><div class="muted">Publishing activity and content approvals</div></div><button id="refresh" class="secondary">Refresh</button></div>
 <div class="stats" id="stats"></div>
 <div id="notice" role="status"></div>
@@ -352,7 +376,7 @@ const $=id=>document.getElementById(id);
 const labels={pending_approval:"Pending approval",publishing:"Publishing",submitted:"Submitted",scheduled:"Scheduled",published:"Published",failed:"Failed",rejected:"Rejected"};
 async function api(path,options={}){const r=await fetch(path,{...options,credentials:"same-origin",headers:{"Content-Type":"application/json",...(options.headers||{})}});let d={};try{d=await r.json()}catch{}if(r.status===401){showLogin();throw new Error("Your session has expired. Please sign in again.")}if(!r.ok)throw new Error(d.error||"Request failed");return d}
 function showLogin(){ $("login").classList.remove("hidden");$("app").classList.add("hidden");$("logout").classList.add("hidden");}
-function showApp(){ $("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");}
+function showApp(isGuest=false){ $("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");$("guestNote").classList.toggle("hidden",!isGuest);window.dashboardGuestMode=isGuest;}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function itemHtml(x,actions=false){
  const p=x.payload||{};
@@ -381,19 +405,21 @@ async function load(){
  $("notice").textContent="Refreshing dashboard…";
  try{
   const d=await api("/api/dashboard/overview");
+  const readOnly=Boolean(window.dashboardGuestMode);
   const totals=d.totals||{};
   $("stats").innerHTML=Object.entries(labels).map(([k,v])=>'<div class="stat"><div class="num">'+(totals[k]||0)+'</div><div class="label">'+v+'</div></div>').join("");
   const pending=(d.items||[]).filter(x=>x.status==="pending_approval");
   $("pendingCount").textContent=pending.length+" items";
-  $("queue").innerHTML=pending.length?pending.map(x=>itemHtml(x,true)).join(""):'<div class="panel muted">No items waiting for approval.</div>';
+  $("queue").innerHTML=pending.length?pending.map(x=>itemHtml(x,!readOnly)).join(""):'<div class="panel muted">No items waiting for approval.</div>';
   $("recent").innerHTML=(d.items||[]).length?d.items.map(x=>itemHtml(x,false)).join(""):'<div class="panel muted">No activity yet.</div>';
   $("notice").textContent="Last updated: "+new Date(d.generated_at).toLocaleString();
  }catch(e){$("notice").textContent=e.message}
 }
+$("guestButton").addEventListener("click",async()=>{ $("guestButton").disabled=true;$("loginError").textContent="";try{await api("/api/dashboard/guest",{method:"POST",body:"{}"});showApp(true);await load()}catch(err){$("loginError").textContent=err.message}finally{$("guestButton").disabled=false}});
 $("loginForm").addEventListener("submit",async e=>{e.preventDefault();$("loginButton").disabled=true;$("loginError").textContent="";
  try{await api("/api/dashboard/login",{method:"POST",body:JSON.stringify({username:$("username").value,password:$("password").value})});$("password").value="";showApp();await load()}
  catch(err){$("loginError").textContent=err.message}finally{$("loginButton").disabled=false}});
-$("logout").addEventListener("click",async()=>{try{await api("/api/dashboard/logout",{method:"POST",body:"{}"})}finally{showLogin()}});
+$("logout").addEventListener("click",async()=>{try{await api("/api/dashboard/logout",{method:"POST",body:"{}"})}finally{window.dashboardGuestMode=false;showLogin()}});
 $("refresh").addEventListener("click",load);
 $("queue").addEventListener("click",async e=>{const b=e.target.closest("button[data-action]");if(!b)return;const action=b.dataset.action;const id=b.dataset.id;
  if(action==="save-caption"){
@@ -428,7 +454,7 @@ $("queue").addEventListener("click",async e=>{const b=e.target.closest("button[d
  try{await api("/api/approval/"+encodeURIComponent(id)+"/approve",{method:"POST",body:JSON.stringify({reviewed_by:"dashboard"})});await load()}
  catch(err){$("notice").textContent=err.message;b.disabled=false}
 });
-(async()=>{try{await api("/api/dashboard/me");showApp();await load()}catch{showLogin()}})();
+(async()=>{try{const session=await api("/api/dashboard/me");showApp(Boolean(session.guest));await load()}catch{showLogin()}})();
 setInterval(()=>{if(!$("app").classList.contains("hidden"))load()},60000);
 </script>
 </body></html>`;
@@ -478,18 +504,30 @@ app.post("/api/dashboard/login", async (request, reply) => {
   return { success: true, expires_at: new Date(expiresAt * 1000).toISOString() };
 });
 
-app.get("/api/dashboard/me", async (request, reply) => {
-  if (!hasDashboardSession(request)) {
-    return reply.code(401).send({ success: false, error: "Not authenticated" });
+app.post("/api/dashboard/guest", async (request, reply) => {
+  const signingSecret = process.env.DASHBOARD_SESSION_SECRET;
+  if (!signingSecret) {
+    return reply.code(503).send({ success: false, error: "Dashboard guest access is not configured" });
   }
-  return { success: true, authenticated: true };
+  const expiresAt = Math.floor(Date.now() / 1000) + dashboardSessionLifetimeSeconds;
+  const signature = createHmac("sha256", signingSecret)
+    .update(`neuralnext-guest:${expiresAt}`)
+    .digest("hex");
+  reply.header("Set-Cookie", `${guestCookieName}=${expiresAt}.${signature}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${dashboardSessionLifetimeSeconds}`);
+  return { success: true, guest: true, expires_at: new Date(expiresAt * 1000).toISOString() };
+});
+
+app.get("/api/dashboard/me", async (request, reply) => {
+  if (hasDashboardSession(request)) return { success: true, authenticated: true, guest: false };
+  if (hasGuestSession(request)) return { success: true, authenticated: true, guest: true };
+  return reply.code(401).send({ success: false, error: "Not authenticated" });
 });
 
 app.post("/api/dashboard/logout", async (request, reply) => {
-  reply.header(
-    "Set-Cookie",
-    `${dashboardCookieName}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
-  );
+  reply.header("Set-Cookie", [
+    `${dashboardCookieName}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`,
+    `${guestCookieName}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
+  ]);
   return { success: true };
 });
 
@@ -846,7 +884,7 @@ app.post("/api/approval/:id/caption", async (request, reply) => {
 
 // Dashboard overview: status counts and latest approval/publication records.
 app.get("/api/dashboard/overview", async (request, reply) => {
-  if (!requireReviewAccess(request, reply)) return;
+  if (!requireDashboardReadAccess(request, reply)) return;
   if (!requireDb(reply)) return;
 
   try {
