@@ -308,7 +308,7 @@ app.get("/dashboard", async (request, reply) => {
 <style>
 :root{color-scheme:dark;--bg:#0b1020;--panel:#141c30;--line:#27334d;--muted:#9aa8c2;--text:#f3f6fc;--accent:#7c9cff;--green:#39c98a;--red:#ff7272;--amber:#f5bd54}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,Segoe UI,sans-serif}
-.wrap{max-width:1180px;margin:auto;padding:28px 22px}.dashboard-banner{width:100%;margin:0 0 22px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#080d18}.dashboard-banner img{display:block;width:100%;height:clamp(150px,22vw,280px);object-fit:cover;object-position:center}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px}
+.wrap{max-width:1180px;margin:auto;padding:28px 22px}.dashboard-banner{width:100%;margin:0 0 22px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#080d18}.dashboard-banner img{display:block;width:100%;height:clamp(150px,22vw,280px);object-fit:cover;object-position:center top}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px}
 .brand{font-size:22px;font-weight:750;letter-spacing:-.5px}.brand span{color:var(--accent)}.muted{color:var(--muted)}
 .panel,.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
 .login{max-width:420px;margin:9vh auto}.login h1{margin:0 0 8px;font-size:25px}
