@@ -966,6 +966,7 @@ app.get("/api/dashboard/overview", async (request, reply) => {
       `SELECT status, COUNT(*)::int AS count
        FROM approval_items
        WHERE COALESCE(payload->>'client_name', 'Datasignz CreativeMinds') = $1
+         AND deleted_at IS NULL
        GROUP BY status`,
       [client]
     );
