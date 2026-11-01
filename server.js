@@ -417,7 +417,7 @@ function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function itemHtml(x,actions=false){
  const p=x.payload||{};
  const photos=Array.isArray(p.media_urls)?p.media_urls:[];
- const video=p.video_url||(p.video_upload?`/api/approval/${x.id}/video`:"");
+ const video=p.video_url||(p.video_upload?"/api/approval/"+encodeURIComponent(x.id)+"/video":"");
  const media=video
   ? '<div class="media-preview"><video controls playsinline preload="metadata" src="'+esc(video)+'">Your browser does not support video playback.</video></div>'
   : (photos.length
