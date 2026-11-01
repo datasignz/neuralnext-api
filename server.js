@@ -335,7 +335,7 @@ app.get("/dashboard", async (request, reply) => {
 .brand{font-size:22px;font-weight:750;letter-spacing:-.5px}.brand span{color:var(--accent)}.muted{color:var(--muted)}.guest-note{padding:10px 13px;border:1px solid #49617e;border-radius:9px;background:#14243a;color:#c9dcf5;margin:12px 0 18px}
 .panel,.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
 .login{max-width:420px;margin:9vh auto}.login h1{margin:0 0 8px;font-size:25px}
-input,button,select{font:inherit}input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);margin:7px 0 15px}
+input,button,select{font:inherit}select{padding:10px 36px 10px 12px;border:1px solid #40546b;border-radius:9px;background:#172438;color:var(--text);min-width:240px}input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);margin:7px 0 15px}
 button{border:0;border-radius:9px;padding:10px 15px;font-weight:650;cursor:pointer;background:var(--accent);color:#081126}
 button.secondary{background:#293650;color:var(--text)}button.danger{background:#522b38;color:#ffdce2}button:disabled{opacity:.5;cursor:wait}
 .stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin:18px 0 24px}
@@ -347,7 +347,7 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 .item{border:1px solid #34465c;border-radius:12px;padding:17px;margin:10px 0;background:linear-gradient(145deg,#1c293a,#172333)}
 .approval-card{display:grid;grid-template-columns:minmax(180px,28%) minmax(0,1fr);gap:18px}.approval-media .media-preview{margin:0}.approval-media .media-preview img{width:100%;height:175px;max-height:210px;object-fit:cover}.approval-media .media-preview video{width:100%;max-height:210px}.approval-content{min-width:0}.approval-content .item-top{justify-content:flex-start;flex-wrap:wrap;margin-bottom:10px}.approval-content .submitted{margin-left:auto;color:#bdc9d8;font-size:12px}.platform-tag{background:#29394d;border:1px solid #40546b;border-radius:9px;padding:3px 9px;font-size:12px}.caption-editor{min-height:78px;background:#111b2b;border-color:#8291a3}.actions button{padding:9px 13px}.actions button:not(.secondary):not(.danger){background:#087c5c;color:white;border:1px solid #1bb88b}.actions .danger{background:#632c36;color:#fff;border:1px solid #d54a55}.actions .secondary{background:#2a3c52;color:#fff;border:1px solid #7890a8}
 .activity-list{padding-top:4px}.activity-row{display:flex;align-items:center;gap:10px;min-height:51px;border-bottom:1px solid #34465c;font-size:12px}.activity-status{min-width:84px;text-align:center;padding:4px 7px;border-radius:18px;background:#26384b;color:#e6edf5}.activity-status.published{background:#15533f;color:#c4f5df;border:1px solid #258a67}.activity-status.rejected,.activity-status.failed{background:#512b34;color:#ffd7dc;border:1px solid #8d3b49}.social-icon{width:23px;height:23px;display:grid;place-items:center;border-radius:50%;font-weight:800;font-size:17px;flex:0 0 23px}.social-icon.instagram{background:linear-gradient(135deg,#6c39c6,#f04478,#ffad47);color:white}.social-icon.facebook{background:#1877f2;color:white;font-family:Arial}.social-icon.other{background:#40546b;color:white}.activity-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.activity-row time{white-space:nowrap;color:#c1ccda}.activity-link{color:#d8e4f3;font-size:17px;text-decoration:none}
-@media(max-width:1050px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-columns{grid-template-columns:1fr}}
+.client-controls{display:flex;align-items:center;gap:10px}.client-controls label{color:var(--muted);font-size:13px}@media(max-width:1050px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-columns{grid-template-columns:1fr}}
 @media(max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding:20px 14px}.top{align-items:flex-start}.approval-card{grid-template-columns:1fr}.approval-media .media-preview img{height:auto;max-height:260px}.activity-row{gap:7px}.activity-row time{display:none}.activity-status{min-width:74px}}
 .item-top{display:flex;justify-content:space-between;gap:12px;align-items:center}.pill{font-size:12px;padding:4px 9px;border-radius:20px;background:#273650;color:#d9e3fa}
 .pill.pending_approval{background:#514122;color:#ffe2a1}.pill.published{background:#164632;color:#a7f0ca}.pill.failed{background:#542b35;color:#ffc1c1}
@@ -369,7 +369,7 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 </section>
 <main id="app" class="hidden">
 <div id="guestNote" class="guest-note hidden">Guest view: you can browse dashboard content, but approving, rejecting and saving changes are disabled.</div>
-<div class="section-head"><div><h1 style="margin:0">Overview</h1><div class="muted">Publishing activity and content approvals</div></div><button id="refresh" class="secondary">Refresh</button></div>
+<div class="section-head dashboard-toolbar"><div><h1 style="margin:0">Overview</h1><div class="muted">Publishing activity and content approvals</div></div><div class="client-controls"><label for="clientSelect">Client</label><select id="clientSelect" aria-label="Select client"><option value="Datasignz CreativeMinds">Datasignz CreativeMinds (current content)</option><option value="De Sportwekker">De Sportwekker</option></select><button id="refresh" class="secondary">Refresh</button></div></div>
 <div class="stats" id="stats"></div>
 <div id="notice" role="status"></div>
 <div class="dashboard-columns">
@@ -417,7 +417,8 @@ function activityHtml(x){
 async function load(){
  $("notice").textContent="Refreshing dashboard…";
  try{
-  const d=await api("/api/dashboard/overview");
+  const selectedClient=$("clientSelect").value;
+  const d=await api("/api/dashboard/overview?client="+encodeURIComponent(selectedClient));
   const readOnly=Boolean(window.dashboardGuestMode);
   const totals=d.totals||{};
   const statIcons={
@@ -445,6 +446,7 @@ $("loginForm").addEventListener("submit",async e=>{e.preventDefault();$("loginBu
  catch(err){$("loginError").textContent=err.message}finally{$("loginButton").disabled=false}});
 $("logout").addEventListener("click",async()=>{try{await api("/api/dashboard/logout",{method:"POST",body:"{}"})}finally{window.dashboardGuestMode=false;showLogin()}});
 $("refresh").addEventListener("click",load);
+$("clientSelect").addEventListener("change",load);
 $("queue").addEventListener("click",async e=>{const b=e.target.closest("button[data-action]");if(!b)return;const action=b.dataset.action;const id=b.dataset.id;
  if(action==="save-caption"){
   const field=$("caption-"+id);if(!field)return;
@@ -783,7 +785,14 @@ app.post("/api/approval/submit", async (request, reply) => {
   const requestId = String(body.request_id || randomUUID()).slice(0, 200);
   const id = randomUUID();
 
+  const allowedClients = ["Datasignz CreativeMinds", "De Sportwekker"];
+  const clientName = String(body.client_name || "Datasignz CreativeMinds").trim();
+  if (!allowedClients.includes(clientName)) {
+    return reply.code(400).send({ success: false, error: "client_name must be Datasignz CreativeMinds or De Sportwekker" });
+  }
+
   const payload = {
+    client_name: clientName,
     user: body.user.trim(),
     platforms,
     caption: String(body.caption || ""),
@@ -912,10 +921,18 @@ app.get("/api/dashboard/overview", async (request, reply) => {
   if (!requireDb(reply)) return;
 
   try {
+    const allowedClients = ["Datasignz CreativeMinds", "De Sportwekker"];
+    const client = String(request.query?.client || "Datasignz CreativeMinds");
+    if (!allowedClients.includes(client)) {
+      return reply.code(400).send({ success: false, error: "Unknown client" });
+    }
+
     const counts = await pool.query(
       `SELECT status, COUNT(*)::int AS count
        FROM approval_items
-       GROUP BY status`
+       WHERE COALESCE(payload->>'client_name', 'Datasignz CreativeMinds') = $1
+       GROUP BY status`,
+      [client]
     );
 
     const recent = await pool.query(
@@ -924,8 +941,10 @@ app.get("/api/dashboard/overview", async (request, reply) => {
               updated_at, upload_post_job_id, upload_post_request_id,
               publish_response
        FROM approval_items
+       WHERE COALESCE(payload->>'client_name', 'Datasignz CreativeMinds') = $1
        ORDER BY submitted_at DESC
-       LIMIT 50`
+       LIMIT 50`,
+      [client]
     );
 
     const summary = {
@@ -945,6 +964,7 @@ app.get("/api/dashboard/overview", async (request, reply) => {
     return {
       success: true,
       generated_at: new Date().toISOString(),
+      client,
       totals: summary,
       total_items: Object.values(summary).reduce((sum, value) => sum + value, 0),
       items: recent.rows
