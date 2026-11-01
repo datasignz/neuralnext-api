@@ -338,10 +338,17 @@ app.get("/dashboard", async (request, reply) => {
 input,button,select{font:inherit}input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);margin:7px 0 15px}
 button{border:0;border-radius:9px;padding:10px 15px;font-weight:650;cursor:pointer;background:var(--accent);color:#081126}
 button.secondary{background:#293650;color:var(--text)}button.danger{background:#522b38;color:#ffdce2}button:disabled{opacity:.5;cursor:wait}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0 24px}
-.stat .num{font-size:28px;font-weight:750}.stat .label{color:var(--muted);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin:18px 0 24px}
+.stat{display:flex;align-items:center;gap:14px;min-height:96px;padding:16px 18px;border-radius:13px;background:linear-gradient(135deg,#1b2940,#182337);border:1px solid #315078;position:relative}
+.stat:after{content:"›";margin-left:auto;color:#b9c8da;font-size:28px}.stat .stat-icon{width:38px;flex:0 0 38px;text-align:center;font-size:31px}.stat .num{font-size:30px;font-weight:780;line-height:1.05}.stat .label{color:#e1e8f4;font-size:14px;white-space:nowrap}
+.stat.pending_approval{background:linear-gradient(135deg,#3a2c50,#29233d);border-color:#9c65d5}.stat.pending_approval .stat-icon{color:#c58aff}.stat.publishing{border-color:#2879bd}.stat.publishing .stat-icon{color:#57b8ef}.stat.scheduled{border-color:#168db0}.stat.scheduled .stat-icon{color:#53d9f1}.stat.published{background:linear-gradient(135deg,#123e39,#173b38);border-color:#169d76}.stat.published .stat-icon{color:#42d9a0}.stat.failed{background:linear-gradient(135deg,#49252d,#38242c);border-color:#c23c48}.stat.failed .stat-icon{color:#ff6565}.stat.rejected{border-color:#586879}.stat.rejected .stat-icon{color:#b9c5d3}
 .section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:25px 0 12px}
-.item{border:1px solid var(--line);border-radius:12px;padding:17px;margin:10px 0;background:#10182a}
+.dashboard-columns{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(330px,1fr);gap:22px;align-items:start}.dashboard-panel{background:linear-gradient(145deg,#182435,#121c2b);border:1px solid #34465c;border-radius:13px;overflow:hidden;min-width:0}.dashboard-panel-head{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid #34465c}.dashboard-panel-head .head-icon{font-size:27px;color:#dbe7f4}.dashboard-panel-head h2{font-size:17px;margin:0;font-weight:750}.dashboard-panel-head p{margin:0;color:#c0cada;font-size:13px}.dashboard-panel-body{padding:0 14px 14px}
+.item{border:1px solid #34465c;border-radius:12px;padding:17px;margin:10px 0;background:linear-gradient(145deg,#1c293a,#172333)}
+.approval-card{display:grid;grid-template-columns:minmax(180px,28%) minmax(0,1fr);gap:18px}.approval-media .media-preview{margin:0}.approval-media .media-preview img{width:100%;height:175px;max-height:210px;object-fit:cover}.approval-media .media-preview video{width:100%;max-height:210px}.approval-content{min-width:0}.approval-content .item-top{justify-content:flex-start;flex-wrap:wrap;margin-bottom:10px}.approval-content .submitted{margin-left:auto;color:#bdc9d8;font-size:12px}.platform-tag{background:#29394d;border:1px solid #40546b;border-radius:9px;padding:3px 9px;font-size:12px}.caption-editor{min-height:78px;background:#111b2b;border-color:#8291a3}.actions button{padding:9px 13px}.actions button:not(.secondary):not(.danger){background:#087c5c;color:white;border:1px solid #1bb88b}.actions .danger{background:#632c36;color:#fff;border:1px solid #d54a55}.actions .secondary{background:#2a3c52;color:#fff;border:1px solid #7890a8}
+.activity-list{padding-top:4px}.activity-row{display:flex;align-items:center;gap:10px;min-height:51px;border-bottom:1px solid #34465c;font-size:12px}.activity-status{min-width:84px;text-align:center;padding:4px 7px;border-radius:18px;background:#26384b;color:#e6edf5}.activity-status.published{background:#15533f;color:#c4f5df;border:1px solid #258a67}.activity-status.rejected,.activity-status.failed{background:#512b34;color:#ffd7dc;border:1px solid #8d3b49}.social-icon{width:23px;height:23px;display:grid;place-items:center;border-radius:50%;font-weight:800;font-size:17px;flex:0 0 23px}.social-icon.instagram{background:linear-gradient(135deg,#6c39c6,#f04478,#ffad47);color:white}.social-icon.facebook{background:#1877f2;color:white;font-family:Arial}.social-icon.other{background:#40546b;color:white}.activity-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.activity-row time{white-space:nowrap;color:#c1ccda}.activity-link{color:#d8e4f3;font-size:17px;text-decoration:none}
+@media(max-width:1050px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-columns{grid-template-columns:1fr}}
+@media(max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding:20px 14px}.top{align-items:flex-start}.approval-card{grid-template-columns:1fr}.approval-media .media-preview img{height:auto;max-height:260px}.activity-row{gap:7px}.activity-row time{display:none}.activity-status{min-width:74px}}
 .item-top{display:flex;justify-content:space-between;gap:12px;align-items:center}.pill{font-size:12px;padding:4px 9px;border-radius:20px;background:#273650;color:#d9e3fa}
 .pill.pending_approval{background:#514122;color:#ffe2a1}.pill.published{background:#164632;color:#a7f0ca}.pill.failed{background:#542b35;color:#ffc1c1}
 .media-preview{margin:14px 0;display:flex;gap:9px;align-items:flex-start;flex-wrap:wrap}.media-preview img{display:block;max-width:100%;width:auto;max-height:320px;object-fit:contain;border-radius:9px;background:#080d18}.media-preview.multi img{width:clamp(130px,28vw,230px);height:190px;object-fit:cover}.media-preview video{display:block;width:min(100%,620px);max-height:380px;background:#05070c;border-radius:9px}.media-empty{color:var(--muted);font-size:13px;margin:12px 0}.caption-label{display:block;color:var(--muted);font-size:13px;margin:14px 0 5px}.caption-editor{display:block;width:100%;min-height:110px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);font:inherit;line-height:1.5}.original-caption{margin:8px 0;color:var(--muted);font-size:13px}.original-caption div{white-space:pre-wrap;margin-top:7px}.rejection-editor{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0c1425}.rejection-editor label{display:block;color:var(--muted);font-size:13px;margin-bottom:6px}.rejection-editor textarea{display:block;width:100%;min-height:85px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:#101a2e;color:var(--text);font:inherit}.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px}
@@ -365,10 +372,10 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 <div class="section-head"><div><h1 style="margin:0">Overview</h1><div class="muted">Publishing activity and content approvals</div></div><button id="refresh" class="secondary">Refresh</button></div>
 <div class="stats" id="stats"></div>
 <div id="notice" role="status"></div>
-<div class="section-head"><h2 style="margin:0">Pending approval</h2><span class="muted" id="pendingCount"></span></div>
-<div id="queue"></div>
-<div class="section-head"><h2 style="margin:0">Recent activity</h2></div>
-<div id="recent"></div>
+<div class="dashboard-columns">
+<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon">☑</span><div><h2>Pending Approvals (<span id="pendingCount">0</span>)</h2><p>Review, edit and approve content for publishing</p></div></div><div class="dashboard-panel-body" id="queue"></div></section>
+<section class="dashboard-panel"><div class="dashboard-panel-head"><span class="head-icon">◷</span><div><h2>Recent Activity</h2><p>Latest approvals, publications and updates</p></div></div><div class="dashboard-panel-body activity-list" id="recent"></div></section>
+</div>
 </main>
 </div>
 <script>
@@ -389,17 +396,23 @@ function itemHtml(x,actions=false){
     : '<div class="media-empty">No media attached</div>');
  const original=p.original_caption;
  const captionEditor=actions
-  ? '<label class="caption-label" for="caption-'+esc(x.id)+'">Edit post caption</label><textarea class="caption-editor" id="caption-'+esc(x.id)+'" maxlength="10000">'+esc(p.caption||"")+'</textarea>'+
+  ? '<label class="caption-label" for="caption-'+esc(x.id)+'">Caption (editable)</label><textarea class="caption-editor" id="caption-'+esc(x.id)+'" maxlength="10000">'+esc(p.caption||"")+'</textarea>'+
     (original!==undefined&&original!==p.caption?'<details class="original-caption"><summary>View original AI caption</summary><div>'+esc(original)+'</div></details>':"")+
-    '<div class="actions"><button class="secondary" data-action="save-caption" data-id="'+esc(x.id)+'">Save changes</button><button data-action="approve" data-id="'+esc(x.id)+'">Approve &amp; publish</button><button class="danger" data-action="reject" data-id="'+esc(x.id)+'">Reject</button></div>'
+    '<div class="actions"><button class="secondary" data-action="save-caption" data-id="'+esc(x.id)+'">▣ &nbsp;Save changes</button><button data-action="approve" data-id="'+esc(x.id)+'">✓ &nbsp;Approve &amp; Publish</button><button class="danger" data-action="reject" data-id="'+esc(x.id)+'">× &nbsp;Reject</button></div>'
   : '<div class="caption">'+esc(p.caption||"(No caption)")+'</div>';
+ const platform=(p.platforms||[]).join(", ")||"—";
  const url=x.publish_response?.url||x.publish_response?.post_url||x.publish_response?.results?.instagram?.url||"";
- return '<article class="item"><div class="item-top"><strong>'+esc(p.user||x.submitted_by||"Content item")+'</strong><span class="pill '+esc(x.status)+'">'+esc(labels[x.status]||x.status)+'</span></div>'+
- media+captionEditor+
- '<div class="meta"><span>Platforms: '+esc((p.platforms||[]).join(", ")||"—")+'</span><span>Submitted: '+esc(x.submitted_at?new Date(x.submitted_at).toLocaleString():"—")+'</span></div>'+
- (x.review_note?'<p class="error">'+esc(x.review_note)+'</p>':"")+
- (url?'<p><a href="'+esc(url)+'" target="_blank" rel="noopener">View published post</a></p>':"")+
- '</article>';
+ return '<article class="item approval-card"><div class="approval-media">'+media+'</div><div class="approval-content"><div class="item-top"><strong>'+esc(p.user||x.submitted_by||"Content item")+'</strong><span class="platform-tag">◎ &nbsp;'+esc(platform)+'</span><span class="submitted">Submitted: '+esc(x.submitted_at?new Date(x.submitted_at).toLocaleString():"—")+'</span></div>'+captionEditor+'<div class="meta">'+(x.review_note?'<span class="error">'+esc(x.review_note)+'</span>':"")+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener">View published post</a>':"")+'</div></div></article>';
+}
+function activityHtml(x){
+ const p=x.payload||{};
+ const status=x.status||"";
+ const platform=(p.platforms||[]).map(v=>String(v).toLowerCase()).join(" ");
+ const platformIcon=platform.includes("instagram")?'<span class="social-icon instagram">◎</span>':platform.includes("facebook")?'<span class="social-icon facebook">f</span>':'<span class="social-icon other">●</span>';
+ const title=p.caption||p.user||x.request_id||"Content update";
+ const date=x.updated_at||x.submitted_at;
+ const url=x.publish_response?.url||x.publish_response?.post_url||x.publish_response?.results?.instagram?.url||"";
+ return '<div class="activity-row"><span class="activity-status '+esc(status)+'">'+esc(labels[status]||status)+'</span>'+platformIcon+'<span class="activity-title" title="'+esc(title)+'">'+esc(title)+'</span><time>'+esc(date?new Date(date).toLocaleString():"—")+'</time>'+(url?'<a class="activity-link" href="'+esc(url)+'" target="_blank" rel="noopener" aria-label="Open post">↗</a>':"")+'</div>';
 }
 async function load(){
  $("notice").textContent="Refreshing dashboard…";
@@ -407,11 +420,12 @@ async function load(){
   const d=await api("/api/dashboard/overview");
   const readOnly=Boolean(window.dashboardGuestMode);
   const totals=d.totals||{};
-  $("stats").innerHTML=Object.entries(labels).map(([k,v])=>'<div class="stat"><div class="num">'+(totals[k]||0)+'</div><div class="label">'+v+'</div></div>').join("");
+  const statIcons={pending_approval:"➤",publishing:"◌",scheduled:"▦",published:"✓",failed:"⚠",rejected:"⊗"};
+  $("stats").innerHTML=Object.entries(labels).map(([k,v])=>'<div class="stat '+k+'"><span class="stat-icon">'+statIcons[k]+'</span><div><div class="num">'+(totals[k]||0)+'</div><div class="label">'+v+'</div></div></div>').join("");
   const pending=(d.items||[]).filter(x=>x.status==="pending_approval");
-  $("pendingCount").textContent=pending.length+" items";
+  $("pendingCount").textContent=pending.length;
   $("queue").innerHTML=pending.length?pending.map(x=>itemHtml(x,!readOnly)).join(""):'<div class="panel muted">No items waiting for approval.</div>';
-  $("recent").innerHTML=(d.items||[]).length?d.items.map(x=>itemHtml(x,false)).join(""):'<div class="panel muted">No activity yet.</div>';
+  $("recent").innerHTML=(d.items||[]).length?d.items.slice(0,8).map(x=>activityHtml(x)).join(""):'<div class="muted">No activity yet.</div>';
   $("notice").textContent="Last updated: "+new Date(d.generated_at).toLocaleString();
  }catch(e){$("notice").textContent=e.message}
 }
