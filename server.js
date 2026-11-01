@@ -133,6 +133,115 @@ async function initializeDatabase() {
   );
 }
 
+
+const uploadPostPollIntervalMs = Math.max(
+  Number(process.env.UPLOAD_POST_POLL_INTERVAL_MS || 60000),
+  15000
+);
+let uploadPostPollRunning = false;
+
+async function pollUploadPostStatuses() {
+  if (!pool || !process.env.UPLOAD_POST_API_KEY || uploadPostPollRunning) return;
+
+  uploadPostPollRunning = true;
+
+  try {
+    const pending = await pool.query(
+      `SELECT id, status, payload, upload_post_job_id, upload_post_request_id
+       FROM approval_items
+       WHERE status IN ('publishing', 'submitted', 'scheduled')
+         AND (upload_post_request_id IS NOT NULL OR upload_post_job_id IS NOT NULL)
+       ORDER BY updated_at ASC
+       LIMIT 25`
+    );
+
+    for (const item of pending.rows) {
+      const params = new URLSearchParams();
+      if (item.upload_post_request_id) {
+        params.set("request_id", item.upload_post_request_id);
+      } else if (item.upload_post_job_id) {
+        params.set("job_id", item.upload_post_job_id);
+      }
+
+      try {
+        const response = await fetch(
+          `${uploadPostBaseUrl()}/api/uploadposts/status?${params}`,
+          {
+            headers: {
+              Authorization: `Apikey ${process.env.UPLOAD_POST_API_KEY}`
+            },
+            signal: AbortSignal.timeout(20000)
+          }
+        );
+
+        const raw = await response.text();
+        let data;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          requestLogPollError(item.id, "Upload-Post returned non-JSON status data");
+          continue;
+        }
+
+        if (!response.ok || data?.success === false) {
+          app.log.warn(
+            { approvalId: item.id, upstreamStatus: response.status },
+            "Background Upload-Post status check was unsuccessful"
+          );
+          continue;
+        }
+
+        const nextStatus = mapUploadPostStatus(
+          data,
+          true,
+          Boolean(item.payload?.video_url)
+        );
+
+        if (nextStatus === item.status) continue;
+
+        const updated = await pool.query(
+          `UPDATE approval_items
+           SET status = $2,
+               publish_response = $3::jsonb,
+               review_note = $4,
+               updated_at = NOW()
+           WHERE id = $1
+             AND status IN ('publishing', 'submitted', 'scheduled')
+           RETURNING id, status`,
+          [
+            item.id,
+            nextStatus,
+            JSON.stringify(data),
+            nextStatus === "failed"
+              ? String(data.error || data.message || "Upload-Post reported a failure").slice(0, 2000)
+              : null
+          ]
+        );
+
+        if (updated.rowCount) {
+          app.log.info(
+            { approvalId: item.id, previousStatus: item.status, status: nextStatus },
+            "Background publishing status synchronised"
+          );
+        }
+      } catch (error) {
+        app.log.warn(
+          { err: error, approvalId: item.id },
+          "Background Upload-Post status check failed"
+        );
+      }
+    }
+  } catch (error) {
+    app.log.error({ err: error }, "Background status checker failed");
+  } finally {
+    uploadPostPollRunning = false;
+  }
+}
+
+function requestLogPollError(approvalId, message) {
+  app.log.warn({ approvalId, message }, "Background Upload-Post status response could not be parsed");
+}
+
 app.get("/", async () => ({
   name: "NeuralNext Engage API",
   status: "online"
@@ -860,6 +969,13 @@ try {
   });
 
   app.log.info(`NeuralNext API running on port ${port}`);
+  // Start periodic status checks after the API is listening.
+  const uploadPostPollTimer = setInterval(
+    pollUploadPostStatuses,
+    uploadPostPollIntervalMs
+  );
+  uploadPostPollTimer.unref();
+  pollUploadPostStatuses();
 
 } catch (error) {
   app.log.error(error);
