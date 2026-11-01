@@ -321,7 +321,7 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 .item{border:1px solid var(--line);border-radius:12px;padding:17px;margin:10px 0;background:#10182a}
 .item-top{display:flex;justify-content:space-between;gap:12px;align-items:center}.pill{font-size:12px;padding:4px 9px;border-radius:20px;background:#273650;color:#d9e3fa}
 .pill.pending_approval{background:#514122;color:#ffe2a1}.pill.published{background:#164632;color:#a7f0ca}.pill.failed{background:#542b35;color:#ffc1c1}
-.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px}
+.media-preview{margin:14px 0;display:flex;gap:9px;align-items:flex-start;flex-wrap:wrap}.media-preview img{display:block;max-width:100%;width:auto;max-height:320px;object-fit:contain;border-radius:9px;background:#080d18}.media-preview.multi img{width:clamp(130px,28vw,230px);height:190px;object-fit:cover}.media-preview video{display:block;width:min(100%,620px);max-height:380px;background:#05070c;border-radius:9px}.media-empty{color:var(--muted);font-size:13px;margin:12px 0}.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px}
 .actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.error{color:#ff9a9a;margin-top:10px}.hidden{display:none!important}
 #notice{margin:12px 0;color:var(--muted)}a{color:#a9bdff;overflow-wrap:anywhere}
 @media(max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding:20px 14px}.top{align-items:flex-start}}
@@ -354,12 +354,18 @@ function showLogin(){ $("login").classList.remove("hidden");$("app").classList.a
 function showApp(){ $("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function itemHtml(x,actions=false){
- const p=x.payload||{};const media=[...(p.media_urls||[]),...(p.video_url?[p.video_url]:[])];
- const links=media.map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">Open media</a>').join(" · ");
+ const p=x.payload||{};
+ const photos=Array.isArray(p.media_urls)?p.media_urls:[];
+ const video=p.video_url||"";
+ const media=video
+  ? '<div class="media-preview"><video controls playsinline preload="metadata" src="'+esc(video)+'">Your browser does not support video playback.</video></div>'
+  : (photos.length
+    ? '<div class="media-preview '+(photos.length>1?'multi':'')+'">'+photos.map((u,i)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener"><img src="'+esc(u)+'" alt="Post image '+(i+1)+'" loading="lazy"></a>').join("")+'</div>'
+    : '<div class="media-empty">No media attached</div>');
  const url=x.publish_response?.url||x.publish_response?.post_url||x.publish_response?.results?.instagram?.url||"";
  return '<article class="item"><div class="item-top"><strong>'+esc(p.user||x.submitted_by||"Content item")+'</strong><span class="pill '+esc(x.status)+'">'+esc(labels[x.status]||x.status)+'</span></div>'+
+ media+
  '<div class="caption">'+esc(p.caption||"(No caption)")+'</div><div class="meta"><span>Platforms: '+esc((p.platforms||[]).join(", ")||"—")+'</span><span>Submitted: '+esc(x.submitted_at?new Date(x.submitted_at).toLocaleString():"—")+'</span></div>'+
- (links?'<div class="meta" style="margin-top:8px">'+links+'</div>':"")+
  (x.review_note?'<p class="error">'+esc(x.review_note)+'</p>':"")+
  (url?'<p><a href="'+esc(url)+'" target="_blank" rel="noopener">View published post</a></p>':"")+
  (actions?'<div class="actions"><button data-action="approve" data-id="'+esc(x.id)+'">Approve &amp; publish</button><button class="danger" data-action="reject" data-id="'+esc(x.id)+'">Reject</button></div>':"")+
