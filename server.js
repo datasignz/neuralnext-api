@@ -296,6 +296,106 @@ app.get("/health", async () => ({
 }));
 
 
+
+app.get("/dashboard", async (request, reply) => {
+  reply.type("text/html; charset=utf-8");
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeuralNext Engage — Dashboard</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#141c30;--line:#27334d;--muted:#9aa8c2;--text:#f3f6fc;--accent:#7c9cff;--green:#39c98a;--red:#ff7272;--amber:#f5bd54}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,Segoe UI,sans-serif}
+.wrap{max-width:1180px;margin:auto;padding:28px 22px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px}
+.brand{font-size:22px;font-weight:750;letter-spacing:-.5px}.brand span{color:var(--accent)}.muted{color:var(--muted)}
+.panel,.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+.login{max-width:420px;margin:9vh auto}.login h1{margin:0 0 8px;font-size:25px}
+input,button,select{font:inherit}input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);margin:7px 0 15px}
+button{border:0;border-radius:9px;padding:10px 15px;font-weight:650;cursor:pointer;background:var(--accent);color:#081126}
+button.secondary{background:#293650;color:var(--text)}button.danger{background:#522b38;color:#ffdce2}button:disabled{opacity:.5;cursor:wait}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0 24px}
+.stat .num{font-size:28px;font-weight:750}.stat .label{color:var(--muted);font-size:13px}
+.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:25px 0 12px}
+.item{border:1px solid var(--line);border-radius:12px;padding:17px;margin:10px 0;background:#10182a}
+.item-top{display:flex;justify-content:space-between;gap:12px;align-items:center}.pill{font-size:12px;padding:4px 9px;border-radius:20px;background:#273650;color:#d9e3fa}
+.pill.pending_approval{background:#514122;color:#ffe2a1}.pill.published{background:#164632;color:#a7f0ca}.pill.failed{background:#542b35;color:#ffc1c1}
+.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px}
+.actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.error{color:#ff9a9a;margin-top:10px}.hidden{display:none!important}
+#notice{margin:12px 0;color:var(--muted)}a{color:#a9bdff;overflow-wrap:anywhere}
+@media(max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding:20px 14px}.top{align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><div class="brand">NeuralNext <span>Engage</span></div><button id="logout" class="secondary hidden">Log out</button></header>
+<section id="login" class="panel login">
+<h1>Dashboard login</h1><p class="muted">Sign in to manage content approvals and publishing.</p>
+<form id="loginForm"><label for="username">Username</label><input id="username" autocomplete="username" required>
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+<button type="submit" id="loginButton">Sign in</button><div id="loginError" class="error"></div></form>
+</section>
+<main id="app" class="hidden">
+<div class="section-head"><div><h1 style="margin:0">Overview</h1><div class="muted">Publishing activity and content approvals</div></div><button id="refresh" class="secondary">Refresh</button></div>
+<div class="stats" id="stats"></div>
+<div id="notice" role="status"></div>
+<div class="section-head"><h2 style="margin:0">Pending approval</h2><span class="muted" id="pendingCount"></span></div>
+<div id="queue"></div>
+<div class="section-head"><h2 style="margin:0">Recent activity</h2></div>
+<div id="recent"></div>
+</main>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const labels={pending_approval:"Pending approval",publishing:"Publishing",submitted:"Submitted",scheduled:"Scheduled",published:"Published",failed:"Failed",rejected:"Rejected"};
+async function api(path,options={}){const r=await fetch(path,{...options,credentials:"same-origin",headers:{"Content-Type":"application/json",...(options.headers||{})}});let d={};try{d=await r.json()}catch{}if(r.status===401){showLogin();throw new Error("Your session has expired. Please sign in again.")}if(!r.ok)throw new Error(d.error||"Request failed");return d}
+function showLogin(){ $("login").classList.remove("hidden");$("app").classList.add("hidden");$("logout").classList.add("hidden");}
+function showApp(){ $("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function itemHtml(x,actions=false){
+ const p=x.payload||{};const media=[...(p.media_urls||[]),...(p.video_url?[p.video_url]:[])];
+ const links=media.map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">Open media</a>').join(" · ");
+ const url=x.publish_response?.url||x.publish_response?.post_url||x.publish_response?.results?.instagram?.url||"";
+ return '<article class="item"><div class="item-top"><strong>'+esc(p.user||x.submitted_by||"Content item")+'</strong><span class="pill '+esc(x.status)+'">'+esc(labels[x.status]||x.status)+'</span></div>'+
+ '<div class="caption">'+esc(p.caption||"(No caption)")+'</div><div class="meta"><span>Platforms: '+esc((p.platforms||[]).join(", ")||"—")+'</span><span>Submitted: '+esc(x.submitted_at?new Date(x.submitted_at).toLocaleString():"—")+'</span></div>'+
+ (links?'<div class="meta" style="margin-top:8px">'+links+'</div>':"")+
+ (x.review_note?'<p class="error">'+esc(x.review_note)+'</p>':"")+
+ (url?'<p><a href="'+esc(url)+'" target="_blank" rel="noopener">View published post</a></p>':"")+
+ (actions?'<div class="actions"><button data-action="approve" data-id="'+esc(x.id)+'">Approve &amp; publish</button><button class="danger" data-action="reject" data-id="'+esc(x.id)+'">Reject</button></div>':"")+
+ '</article>';
+}
+async function load(){
+ $("notice").textContent="Refreshing dashboard…";
+ try{
+  const d=await api("/api/dashboard/overview");
+  const totals=d.totals||{};
+  $("stats").innerHTML=Object.entries(labels).map(([k,v])=>'<div class="stat"><div class="num">'+(totals[k]||0)+'</div><div class="label">'+v+'</div></div>').join("");
+  const pending=(d.items||[]).filter(x=>x.status==="pending_approval");
+  $("pendingCount").textContent=pending.length+" items";
+  $("queue").innerHTML=pending.length?pending.map(x=>itemHtml(x,true)).join(""):'<div class="panel muted">No items waiting for approval.</div>';
+  $("recent").innerHTML=(d.items||[]).length?d.items.map(x=>itemHtml(x,false)).join(""):'<div class="panel muted">No activity yet.</div>';
+  $("notice").textContent="Last updated: "+new Date(d.generated_at).toLocaleString();
+ }catch(e){$("notice").textContent=e.message}
+}
+$("loginForm").addEventListener("submit",async e=>{e.preventDefault();$("loginButton").disabled=true;$("loginError").textContent="";
+ try{await api("/api/dashboard/login",{method:"POST",body:JSON.stringify({username:$("username").value,password:$("password").value})});$("password").value="";showApp();await load()}
+ catch(err){$("loginError").textContent=err.message}finally{$("loginButton").disabled=false}});
+$("logout").addEventListener("click",async()=>{try{await api("/api/dashboard/logout",{method:"POST",body:"{}"})}finally{showLogin()}});
+$("refresh").addEventListener("click",load);
+$("queue").addEventListener("click",async e=>{const b=e.target.closest("button[data-action]");if(!b)return;const action=b.dataset.action;const id=b.dataset.id;
+ if(action==="reject"&&!confirm("Reject this content item?"))return;
+ if(action==="approve"&&!confirm("Approve and publish this content now?"))return;
+ b.disabled=true;$("notice").textContent=action==="approve"?"Publishing…":"Rejecting…";
+ try{await api("/api/approval/"+encodeURIComponent(id)+"/"+action,{method:"POST",body:JSON.stringify({reviewed_by:"dashboard"})});await load()}
+ catch(err){$("notice").textContent=err.message;b.disabled=false}
+});
+(async()=>{try{await api("/api/dashboard/me");showApp();await load()}catch{showLogin()}})();
+setInterval(()=>{if(!$("app").classList.contains("hidden"))load()},60000);
+</script>
+</body></html>`;
+});
+
 // Dashboard login. Credentials and signing secret are configured in Railway variables.
 app.post("/api/dashboard/login", async (request, reply) => {
   const username = process.env.DASHBOARD_USERNAME;
