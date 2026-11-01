@@ -369,7 +369,7 @@ button.secondary{background:#293650;color:var(--text)}button.danger{background:#
 </section>
 <main id="app" class="hidden">
 <div id="guestNote" class="guest-note hidden">Guest view: you can browse dashboard content, but approving, rejecting and saving changes are disabled.</div>
-<div class="section-head dashboard-toolbar"><div><h1 style="margin:0">Overview</h1><div class="muted">Publishing activity and content approvals</div></div><div class="client-controls"><label for="clientSelect">Client</label><select id="clientSelect" aria-label="Select client"><option value="Datasignz CreativeMinds">Datasignz CreativeMinds (current content)</option><option value="De Sportwekker">De Sportwekker</option></select><button id="refresh" class="secondary">Refresh</button></div></div>
+<div class="section-head dashboard-toolbar"><div><h1 style="margin:0">Overview</h1><div class="muted">Publishing activity and content approvals</div></div><div class="client-controls"><label for="clientSelect">Client</label><select id="clientSelect" aria-label="Select client"><option value="Datasignz CreativeMinds">Datasignz CreativeMinds</option><option value="De Sportwekker">De Sportwekker</option></select><button id="refresh" class="secondary">Refresh</button></div></div>
 <div class="stats" id="stats"></div>
 <div id="notice" role="status"></div>
 <div class="dashboard-columns">
