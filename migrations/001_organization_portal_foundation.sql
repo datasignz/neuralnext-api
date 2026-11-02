@@ -122,6 +122,42 @@ WHERE a.organization_id IS NULL
       AND a.payload->>'client_name' = 'CleviaStudios')
   );
 
+-- Automatically assign organisation scope to future approval submissions.
+-- Existing submit endpoints write payload.client_name but do not write organization_id.
+CREATE OR REPLACE FUNCTION set_approval_item_organization()
+RETURNS TRIGGER AS $
+DECLARE
+  client_slug TEXT;
+BEGIN
+  IF NEW.organization_id IS NULL THEN
+    client_slug := CASE
+      WHEN COALESCE(NEW.payload->>'client_name', 'Datasignz CreativeMinds') = 'Datasignz CreativeMinds'
+        THEN 'datasignz-creativeminds'
+      WHEN NEW.payload->>'client_name' = 'De Sportwekker'
+        THEN 'de-sportwekker'
+      WHEN NEW.payload->>'client_name' = 'CleviaStudios'
+        THEN 'cleviastudios'
+      ELSE NULL
+    END;
+
+    IF client_slug IS NOT NULL THEN
+      SELECT id INTO NEW.organization_id
+      FROM organizations
+      WHERE slug = client_slug AND status = 'active';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS approval_items_set_organization ON approval_items;
+CREATE TRIGGER approval_items_set_organization
+BEFORE INSERT OR UPDATE OF payload, organization_id
+ON approval_items
+FOR EACH ROW
+EXECUTE FUNCTION set_approval_item_organization();
+
 CREATE INDEX IF NOT EXISTS approval_items_organization_status_submitted_idx
   ON approval_items (organization_id, status, submitted_at DESC);
 
