@@ -149,7 +149,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS approval_items_set_organization ON approval_items;
 CREATE TRIGGER approval_items_set_organization
