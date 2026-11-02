@@ -125,7 +125,7 @@ WHERE a.organization_id IS NULL
 -- Automatically assign organisation scope to future approval submissions.
 -- Existing submit endpoints write payload.client_name but do not write organization_id.
 CREATE OR REPLACE FUNCTION set_approval_item_organization()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER AS $$
 DECLARE
   client_slug TEXT;
 BEGIN
