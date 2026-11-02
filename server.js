@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import pg from "pg";
+import { registerClientPortal } from "./portal-auth.js";
 
 const { Pool } = pg;
 const app = Fastify({ logger: true, bodyLimit: 2 * 1024 * 1024 });
@@ -1638,6 +1639,8 @@ app.post("/api/social/publish", async (request, reply) => {
     error: "Direct publishing is disabled. Submit content to /api/approval/submit and publish only after human approval."
   });
 });
+
+await registerClientPortal(app, { pool, isAdminSession: hasDashboardSession });
 
 const port = Number(process.env.PORT || 3000);
 
