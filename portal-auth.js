@@ -435,6 +435,88 @@ export async function registerClientPortal(app, { pool, isAdminSession }) {
 
 
 
+
+  app.get("/api/portal/reviews", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ success: false, error: "Database unavailable" });
+    try {
+      const access = await requireMembership(request, reply);
+      if (!access) return;
+      const result = await pool.query(
+        `SELECT r.id, r.approval_item_id, r.action, r.message, r.created_at,
+                u.full_name, u.email
+         FROM client_review_actions r
+         JOIN users u ON u.id = r.user_id
+         WHERE r.organization_id=$1
+         ORDER BY r.created_at DESC
+         LIMIT 250`,
+        [access.membership.organization_id]
+      );
+      return { success: true, reviews: result.rows };
+    } catch (error) {
+      request.log.error({ err: error }, "Portal review history query failed");
+      return reply.code(500).send({ success: false, error: "Could not load review history" });
+    }
+  });
+
+  app.get("/api/portal/messages", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ success: false, error: "Database unavailable" });
+    try {
+      const access = await requireMembership(request, reply);
+      if (!access) return;
+      const itemId = String(request.query?.approval_item_id || "").trim();
+      const values = [access.membership.organization_id];
+      let itemFilter = "";
+      if (itemId) {
+        values.push(itemId);
+        itemFilter = "AND m.approval_item_id=$2";
+      }
+      const result = await pool.query(
+        `SELECT m.id, m.approval_item_id, m.message, m.created_at,
+                u.full_name, u.email
+         FROM portal_messages m
+         JOIN users u ON u.id=m.user_id
+         WHERE m.organization_id=$1 ${itemFilter}
+         ORDER BY m.created_at ASC
+         LIMIT 500`,
+        values
+      );
+      return { success: true, messages: result.rows };
+    } catch (error) {
+      request.log.error({ err: error }, "Portal messages query failed");
+      return reply.code(500).send({ success: false, error: "Could not load messages" });
+    }
+  });
+
+  app.post("/api/portal/messages", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ success: false, error: "Database unavailable" });
+    try {
+      const access = await requireMembership(request, reply);
+      if (!access) return;
+      const message = String(request.body?.message || "").trim();
+      const itemId = request.body?.approval_item_id ? String(request.body.approval_item_id) : null;
+      if (!message || message.length > 5000) {
+        return reply.code(400).send({ success: false, error: "Message must contain 1 to 5,000 characters" });
+      }
+      if (itemId) {
+        const item = await pool.query(
+          "SELECT id FROM approval_items WHERE id=$1 AND organization_id=$2 AND deleted_at IS NULL",
+          [itemId, access.membership.organization_id]
+        );
+        if (!item.rowCount) return reply.code(404).send({ success: false, error: "Related content not found" });
+      }
+      const saved = await pool.query(
+        `INSERT INTO portal_messages (id,organization_id,user_id,approval_item_id,message)
+         VALUES ($1,$2,$3,$4,$5)
+         RETURNING id,approval_item_id,message,created_at`,
+        [randomUUID(), access.membership.organization_id, access.user.id, itemId, message]
+      );
+      return reply.code(201).send({ success: true, message: saved.rows[0] });
+    } catch (error) {
+      request.log.error({ err: error }, "Portal message creation failed");
+      return reply.code(500).send({ success: false, error: "Could not send message" });
+    }
+  });
+
   app.get("/portal/activate", async (request, reply) => {
     const token = String(request.query?.token || "");
     reply.type("text/html; charset=utf-8");
