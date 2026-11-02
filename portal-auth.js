@@ -492,6 +492,7 @@ export async function registerClientPortal(app, { pool, isAdminSession }) {
     try {
       const access = await requireMembership(request, reply);
       if (!access) return;
+      if (access.membership.role === "guest") return reply.code(403).send({ success: false, error: "Guest access is read-only" });
       const message = String(request.body?.message || "").trim();
       const itemId = request.body?.approval_item_id ? String(request.body.approval_item_id) : null;
       if (!message || message.length > 5000) {
