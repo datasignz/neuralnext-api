@@ -305,6 +305,134 @@ export async function registerClientPortal(app, { pool, isAdminSession }) {
     }
   });
 
+
+  async function requireMembership(request, reply) {
+    const context = await getPortalUser(pool, request);
+    if (!context) {
+      reply.code(401).send({ success: false, error: "Client login required" });
+      return null;
+    }
+    const slug = String(request.query?.organization_slug || request.body?.organization_slug || "").trim();
+    if (!slug) {
+      reply.code(400).send({ success: false, error: "organization_slug is required" });
+      return null;
+    }
+    const membership = context.memberships.find(item => item.organization_slug === slug);
+    if (!membership) {
+      reply.code(403).send({ success: false, error: "You do not have access to this organisation" });
+      return null;
+    }
+    return { ...context, membership };
+  }
+
+  app.get("/api/portal/content", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ success: false, error: "Database unavailable" });
+    try {
+      const access = await requireMembership(request, reply);
+      if (!access) return;
+      const result = await pool.query(
+        `SELECT a.id, a.request_id, a.status, a.payload, a.submitted_at,
+                a.reviewed_at, a.updated_at, a.upload_post_job_id,
+                a.upload_post_request_id,
+                (a.video_data IS NOT NULL) AS has_video,
+                COALESCE(actions.recent_actions, '[]'::json) AS client_actions
+         FROM approval_items a
+         LEFT JOIN LATERAL (
+           SELECT json_agg(json_build_object(
+             'action', x.action, 'message', x.message, 'created_at', x.created_at
+           ) ORDER BY x.created_at DESC) AS recent_actions
+           FROM (
+             SELECT action, message, created_at
+             FROM client_review_actions
+             WHERE approval_item_id = a.id
+               AND organization_id = a.organization_id
+             ORDER BY created_at DESC LIMIT 5
+           ) x
+         ) actions ON TRUE
+         WHERE a.organization_id = $1 AND a.deleted_at IS NULL
+         ORDER BY a.submitted_at DESC
+         LIMIT 200`,
+        [access.membership.organization_id]
+      );
+      return {
+        success: true,
+        organization: access.membership.organization_name,
+        role: access.membership.role,
+        items: result.rows
+      };
+    } catch (error) {
+      request.log.error({ err: error }, "Tenant-scoped portal content query failed");
+      return reply.code(500).send({ success: false, error: "Could not load organisation content" });
+    }
+  });
+
+  app.get("/api/portal/content/:id/video", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ success: false, error: "Database unavailable" });
+    try {
+      const access = await requireMembership(request, reply);
+      if (!access) return;
+      const result = await pool.query(
+        `SELECT video_data, video_filename, video_mimetype
+         FROM approval_items
+         WHERE id=$1 AND organization_id=$2
+           AND deleted_at IS NULL AND video_data IS NOT NULL`,
+        [request.params.id, access.membership.organization_id]
+      );
+      if (!result.rowCount) return reply.code(404).send({ success: false, error: "Video not found" });
+      reply.header("Content-Disposition", 'inline; filename="' + String(result.rows[0].video_filename || "video.mp4").replace(/["\\\\]/g, "") + '"');
+      reply.header("Cache-Control", "private, no-store");
+      reply.type(result.rows[0].video_mimetype || "video/mp4");
+      return reply.send(result.rows[0].video_data);
+    } catch (error) {
+      request.log.error({ err: error }, "Tenant-scoped video retrieval failed");
+      return reply.code(500).send({ success: false, error: "Could not retrieve video" });
+    }
+  });
+
+  app.post("/api/portal/content/:id/review", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ success: false, error: "Database unavailable" });
+    try {
+      const access = await requireMembership(request, reply);
+      if (!access) return;
+      if (!["admin", "social_media_manager", "client"].includes(access.membership.role)) {
+        return reply.code(403).send({ success: false, error: "Your role cannot review content" });
+      }
+      const action = String(request.body?.action || "");
+      const message = String(request.body?.message || "").trim().slice(0, 2000);
+      if (!["approved_by_client", "rejected_by_client", "revision_requested"].includes(action)) {
+        return reply.code(400).send({ success: false, error: "Unsupported review action" });
+      }
+      if (action !== "approved_by_client" && !message) {
+        return reply.code(400).send({ success: false, error: "Please include a reason or revision note" });
+      }
+      const item = await pool.query(
+        `SELECT id, status FROM approval_items
+         WHERE id=$1 AND organization_id=$2 AND deleted_at IS NULL
+         FOR UPDATE`,
+        [request.params.id, access.membership.organization_id]
+      );
+      if (!item.rowCount) return reply.code(404).send({ success: false, error: "Content not found" });
+      if (item.rows[0].status !== "pending_approval") {
+        return reply.code(409).send({ success: false, error: "Only content awaiting approval can be reviewed" });
+      }
+      const saved = await pool.query(
+        `INSERT INTO client_review_actions
+         (id, approval_item_id, organization_id, user_id, action, message)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         RETURNING id, action, message, created_at`,
+        [randomUUID(), request.params.id, access.membership.organization_id, access.user.id, action, message || null]
+      );
+      return reply.code(201).send({
+        success: true,
+        review: saved.rows[0],
+        note: "Decision recorded for Datasignz review. This action does not publish or change the publishing status."
+      });
+    } catch (error) {
+      request.log.error({ err: error }, "Client review action failed");
+      return reply.code(500).send({ success: false, error: "Could not record review action" });
+    }
+  });
+
   app.post("/api/portal/logout", async (request, reply) => {
     if (pool) {
       const token = getCookie(request, portalCookieName);
