@@ -3,6 +3,7 @@
 -- Review every result. This script does not create or modify database objects.
 
 -- 1. Confirm the existing approval_items table and columns required by migrations.
+-- organization_id is expected to be absent before migration 001.
 SELECT
   to_regclass('public.approval_items') AS approval_items_table,
   EXISTS (SELECT 1 FROM information_schema.columns
@@ -10,13 +11,14 @@ SELECT
   EXISTS (SELECT 1 FROM information_schema.columns
           WHERE table_schema='public' AND table_name='approval_items' AND column_name='deleted_at') AS has_deleted_at,
   EXISTS (SELECT 1 FROM information_schema.columns
-          WHERE table_schema='public' AND table_name='approval_items' AND column_name='submitted_at') AS has_submitted_at;
+          WHERE table_schema='public' AND table_name='approval_items' AND column_name='submitted_at') AS has_submitted_at,
+  EXISTS (SELECT 1 FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='approval_items' AND column_name='organization_id') AS has_organization_id;
 
--- 2. Count records that will be assigned to each seeded organisation.
+-- 2. Count records by client name using only columns that predate migration 001.
 SELECT
   COALESCE(payload->>'client_name', 'Datasignz CreativeMinds') AS client_name,
-  COUNT(*) AS approval_items,
-  COUNT(*) FILTER (WHERE organization_id IS NULL) AS currently_unassigned
+  COUNT(*) AS approval_items
 FROM approval_items
 GROUP BY 1
 ORDER BY 1;
@@ -29,7 +31,7 @@ WHERE COALESCE(payload->>'client_name', 'Datasignz CreativeMinds')
 ORDER BY submitted_at DESC
 LIMIT 100;
 
--- 4. Confirm whether migration tables already exist (safe to run before/after).
+-- 4. Confirm whether portal tables already exist (safe before or after migrations).
 SELECT
   to_regclass('public.organizations') AS organizations_table,
   to_regclass('public.users') AS users_table,
@@ -39,9 +41,8 @@ SELECT
   to_regclass('public.client_review_actions') AS client_review_actions_table,
   to_regclass('public.portal_messages') AS portal_messages_table;
 
--- 5. If the portal tables already exist, inspect existing tenant mapping.
-SELECT
-  COUNT(*) AS total_items,
-  COUNT(organization_id) AS assigned_items,
-  COUNT(*) FILTER (WHERE organization_id IS NULL) AS unassigned_items
-FROM approval_items;
+-- 5. If has_organization_id in result 1 is true, run this additional read-only check:
+-- SELECT COUNT(*) AS total_items,
+--        COUNT(organization_id) AS assigned_items,
+--        COUNT(*) FILTER (WHERE organization_id IS NULL) AS unassigned_items
+-- FROM approval_items;
