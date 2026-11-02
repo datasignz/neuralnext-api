@@ -433,6 +433,59 @@ export async function registerClientPortal(app, { pool, isAdminSession }) {
     }
   });
 
+
+  app.get("/portal", async (request, reply) => {
+    reply.type("text/html; charset=utf-8");
+    return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeuralNext Engage | Client Portal</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#141c30;--line:#2b3953;--text:#f3f6fc;--muted:#9aa8c2;--accent:#7c9cff;--green:#39c98a;--red:#ff7272}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,Segoe UI,sans-serif}
+.wrap{max-width:1100px;margin:auto;padding:28px 20px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}
+.brand{font-size:22px;font-weight:800}.brand span{color:var(--accent)}.muted{color:var(--muted)}
+.panel,.post{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+.login{max-width:420px;margin:9vh auto}.login h1{margin-top:0}
+input,select,textarea,button{font:inherit}input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;background:#0e1628;color:var(--text);margin:7px 0 14px}
+button{border:0;border-radius:9px;padding:10px 15px;font-weight:700;cursor:pointer;background:var(--accent);color:#081126}
+button.secondary{background:#293650;color:var(--text)}button.good{background:#087c5c;color:white}button.bad{background:#632c36;color:white}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
+.post h3{margin:0 0 8px}.post p{white-space:pre-wrap}.post img,.post video{width:100%;max-height:360px;object-fit:contain;background:#070b14;border-radius:9px;margin-top:10px}
+.tag{display:inline-block;padding:3px 9px;border-radius:20px;background:#293650;font-size:12px;margin:2px}
+.hidden{display:none}.error{color:#ff9292}.notice{padding:10px 12px;border:1px solid #40546b;border-radius:9px;margin:12px 0;color:#cbd8e8}
+@media(max-width:600px){.wrap{padding:18px 12px}.top{align-items:flex-start;flex-direction:column}}
+</style></head><body><main class="wrap">
+<section id="login" class="panel login"><div class="brand">NeuralNext <span>Engage</span></div>
+<h1>Client Portal</h1><p class="muted">Sign in to review your social media content.</p>
+<form id="loginForm"><label>Email</label><input id="email" type="email" autocomplete="username" required>
+<label>Password</label><input id="password" type="password" autocomplete="current-password" required>
+<button type="submit">Sign in</button></form><p id="loginError" class="error"></p></section>
+<section id="app" class="hidden">
+<header class="top"><div><div class="brand">NeuralNext <span>Engage</span></div><div id="welcome" class="muted"></div></div>
+<div class="actions"><select id="orgSelect" aria-label="Organisation"></select><button id="logout" class="secondary">Log out</button></div></header>
+<div class="panel"><h2 id="orgTitle">Your content</h2><p class="muted">Review submitted content, request changes or approve it for Datasignz to process.</p><div id="message" class="notice hidden"></div></div>
+<div id="content" class="grid" style="margin-top:16px"></div>
+</section></main>
+<script>
+(function(){
+const login=document.getElementById("login"), app=document.getElementById("app"), content=document.getElementById("content");
+const msg=document.getElementById("message"), orgSelect=document.getElementById("orgSelect");
+let memberships=[], currentOrg="";
+function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function showMessage(t){msg.textContent=t;msg.classList.remove("hidden");}
+function fail(t){document.getElementById("loginError").textContent=t;}
+async function api(url,opts){const res=await fetch(url,Object.assign({credentials:"same-origin",headers:{"Content-Type":"application/json"}},opts||{}));let data={};try{data=await res.json();}catch(e){}if(!res.ok)throw new Error(data.error||"Request failed");return data;}
+async function loadMe(){const data=await api("/api/portal/me");memberships=data.memberships||[];if(!memberships.length)throw new Error("No active organisation membership was found.");document.getElementById("welcome").textContent="Signed in as "+data.user.email;orgSelect.innerHTML=memberships.map(function(m){return '<option value="'+esc(m.organization_slug)+'">'+esc(m.organization_name)+'</option>';}).join("");currentOrg=memberships[0].organization_slug;orgSelect.value=currentOrg;login.classList.add("hidden");app.classList.remove("hidden");await loadContent();}
+async function loadContent(){currentOrg=orgSelect.value;content.innerHTML='<div class="panel">Loading content…</div>';document.getElementById("orgTitle").textContent=memberships.find(function(m){return m.organization_slug===currentOrg;}).organization_name+" content";try{const data=await api("/api/portal/content?organization_slug="+encodeURIComponent(currentOrg));const items=data.items||[];if(!items.length){content.innerHTML='<div class="panel">No content has been submitted for review yet.</div>';return;}content.innerHTML=items.map(function(item){const p=item.payload||{};const media=(p.media_urls||[]).map(function(url){return '<img loading="lazy" src="'+esc(url)+'" alt="Submitted media">';}).join("");const video=item.has_video?'<video controls preload="metadata" src="/api/portal/content/'+encodeURIComponent(item.id)+'/video?organization_slug='+encodeURIComponent(currentOrg)+'"></video>':"";const platforms=(p.platforms||[]).map(function(x){return '<span class="tag">'+esc(x)+'</span>';}).join("");const canReview=item.status==="pending_approval"&&["admin","social_media_manager","client"].includes(memberships.find(function(m){return m.organization_slug===currentOrg;}).role);return '<article class="post"><div><span class="tag">'+esc(item.status)+'</span> '+platforms+'</div><h3>'+esc(p.caption||"Untitled post")+'</h3><p>'+esc(p.caption||"")+'</p><div>'+media+video+'</div><p class="muted">Submitted: '+esc(new Date(item.submitted_at).toLocaleString())+'</p>'+(canReview?'<div class="actions"><button class="good" data-id="'+esc(item.id)+'" data-action="approved_by_client">Approve</button><button class="bad" data-id="'+esc(item.id)+'" data-action="rejected_by_client">Reject</button><button class="secondary" data-id="'+esc(item.id)+'" data-action="revision_requested">Request revision</button></div>':"")+'</article>';}).join("");}catch(e){content.innerHTML='<div class="panel error">'+esc(e.message)+'</div>';}}
+document.getElementById("loginForm").addEventListener("submit",async function(e){e.preventDefault();fail("");try{await api("/api/portal/login",{method:"POST",body:JSON.stringify({email:document.getElementById("email").value,password:document.getElementById("password").value})});await loadMe();}catch(err){fail(err.message);}});
+orgSelect.addEventListener("change",loadContent);
+document.getElementById("logout").addEventListener("click",async function(){await api("/api/portal/logout",{method:"POST",body:"{}"});app.classList.add("hidden");login.classList.remove("hidden");});
+content.addEventListener("click",async function(e){const btn=e.target.closest("button[data-action]");if(!btn)return;let message="";if(btn.dataset.action!=="approved_by_client"){message=window.prompt(btn.dataset.action==="revision_requested"?"Describe the requested changes:":"Please provide a reason for rejecting this content:")||"";if(!message.trim())return;}btn.disabled=true;try{const result=await api("/api/portal/content/"+encodeURIComponent(btn.dataset.id)+"/review?organization_slug="+encodeURIComponent(currentOrg),{method:"POST",body:JSON.stringify({organization_slug:currentOrg,action:btn.dataset.action,message:message})});showMessage(result.note||"Your response was recorded.");await loadContent();}catch(err){showMessage(err.message);btn.disabled=false;}});
+loadMe().catch(function(){});
+})();
+</script></body></html>`;
+  });
+
   app.post("/api/portal/logout", async (request, reply) => {
     if (pool) {
       const token = getCookie(request, portalCookieName);
