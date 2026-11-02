@@ -214,13 +214,15 @@ export async function registerClientPortal(app, { pool, isAdminSession }) {
           return reply.code(403).send({ success: false, error: "This account is suspended" });
         }
         userId = user.rows[0].id;
-        const passwordHash = await makePasswordHash(password);
-        await client.query(
-          `UPDATE users SET full_name=$2, password_hash=$3, status='active',
-             email_verified_at=COALESCE(email_verified_at,NOW()), updated_at=NOW()
-           WHERE id=$1`,
-          [userId, fullName, passwordHash]
-        );
+        if (user.rows[0].status === "invited") {
+          const passwordHash = await makePasswordHash(password);
+          await client.query(
+            `UPDATE users SET full_name=$2, password_hash=$3, status='active',
+               email_verified_at=COALESCE(email_verified_at,NOW()), updated_at=NOW()
+             WHERE id=$1`,
+            [userId, fullName, passwordHash]
+          );
+        }
       } else {
         userId = randomUUID();
         const passwordHash = await makePasswordHash(password);
