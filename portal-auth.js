@@ -405,28 +405,42 @@ export async function registerClientPortal(app, { pool, isAdminSession }) {
       if (action !== "approved_by_client" && !message) {
         return reply.code(400).send({ success: false, error: "Please include a reason or revision note" });
       }
-      const item = await pool.query(
-        `SELECT id, status FROM approval_items
-         WHERE id=$1 AND organization_id=$2 AND deleted_at IS NULL
-         FOR UPDATE`,
-        [request.params.id, access.membership.organization_id]
-      );
-      if (!item.rowCount) return reply.code(404).send({ success: false, error: "Content not found" });
-      if (item.rows[0].status !== "pending_approval") {
-        return reply.code(409).send({ success: false, error: "Only content awaiting approval can be reviewed" });
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const item = await client.query(
+          `SELECT id, status FROM approval_items
+           WHERE id=$1 AND organization_id=$2 AND deleted_at IS NULL
+           FOR UPDATE`,
+          [request.params.id, access.membership.organization_id]
+        );
+        if (!item.rowCount) {
+          await client.query("ROLLBACK");
+          return reply.code(404).send({ success: false, error: "Content not found" });
+        }
+        if (item.rows[0].status !== "pending_approval") {
+          await client.query("ROLLBACK");
+          return reply.code(409).send({ success: false, error: "Only content awaiting approval can be reviewed" });
+        }
+        const saved = await client.query(
+          `INSERT INTO client_review_actions
+           (id, approval_item_id, organization_id, user_id, action, message)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           RETURNING id, action, message, created_at`,
+          [randomUUID(), request.params.id, access.membership.organization_id, access.user.id, action, message || null]
+        );
+        await client.query("COMMIT");
+        return reply.code(201).send({
+          success: true,
+          review: saved.rows[0],
+          note: "Decision recorded for Datasignz review. This action does not publish or change the publishing status."
+        });
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
       }
-      const saved = await pool.query(
-        `INSERT INTO client_review_actions
-         (id, approval_item_id, organization_id, user_id, action, message)
-         VALUES ($1,$2,$3,$4,$5,$6)
-         RETURNING id, action, message, created_at`,
-        [randomUUID(), request.params.id, access.membership.organization_id, access.user.id, action, message || null]
-      );
-      return reply.code(201).send({
-        success: true,
-        review: saved.rows[0],
-        note: "Decision recorded for Datasignz review. This action does not publish or change the publishing status."
-      });
     } catch (error) {
       request.log.error({ err: error }, "Client review action failed");
       return reply.code(500).send({ success: false, error: "Could not record review action" });
