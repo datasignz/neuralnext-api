@@ -434,6 +434,16 @@ export async function registerClientPortal(app, { pool, isAdminSession }) {
   });
 
 
+
+  app.get("/portal/activate", async (request, reply) => {
+    const token = String(request.query?.token || "");
+    reply.type("text/html; charset=utf-8");
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Activate NeuralNext Engage Account</title>
+<style>body{margin:0;background:#0b1020;color:#f3f6fc;font:15px/1.5 system-ui,sans-serif}.panel{max-width:420px;margin:9vh auto;padding:24px;background:#141c30;border:1px solid #2b3953;border-radius:14px}input,button{box-sizing:border-box;width:100%;padding:12px;margin:8px 0 14px;border-radius:8px;border:1px solid #34445f;background:#0e1628;color:#fff;font:inherit}button{background:#7c9cff;color:#081126;border:0;font-weight:700;cursor:pointer}.muted{color:#9aa8c2}.error{color:#ff9292}</style></head><body><main class="panel"><h1>Activate your account</h1><p class="muted">Create your NeuralNext Engage client portal login.</p>
+<form id="activate"><label>Your full name</label><input id="name" required maxlength="200"><label>Password (minimum 12 characters)</label><input id="password" type="password" minlength="12" required><label>Confirm password</label><input id="confirm" type="password" minlength="12" required><button>Create account</button></form><p id="result" class="error"></p></main>
+<script>const invitationToken=${JSON.stringify(token)};document.getElementById("activate").addEventListener("submit",async function(e){e.preventDefault();const result=document.getElementById("result");const password=document.getElementById("password").value;if(password!==document.getElementById("confirm").value){result.textContent="Passwords do not match.";return;}try{const response=await fetch("/api/portal/activate",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({token:invitationToken,full_name:document.getElementById("name").value,password:password})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Activation failed");window.location.href="/portal";}catch(err){result.textContent=err.message;}});</script></body></html>`;
+  });
+
   app.get("/portal", async (request, reply) => {
     reply.type("text/html; charset=utf-8");
     return `<!doctype html>
